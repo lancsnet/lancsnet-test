@@ -1,0 +1,26 @@
+name: VSP Security Gate
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  vsp-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: VSP Security Gate
+        run: |
+          RESULT=$(curl -s -X POST \
+            -H "X-API-Key: ${{ secrets.VSP_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"repo\":\"$GITHUB_REPOSITORY\",\"sha\":\"$GITHUB_SHA\",\"branch\":\"$GITHUB_REF_NAME\"}" \
+            http://vsp.linksafe.vn:30800/api/v1/cicd/pr-gate/webhook)
+          echo "VSP Gate result: $RESULT"
+          GATE=$(echo $RESULT | python3 -c "import sys,json; print(json.load(sys.stdin).get('gate','PASS'))" 2>/dev/null)
+          if [ "$GATE" = "FAIL" ]; then
+            echo "VSP Gate FAILED — critical findings detected"
+            exit 1
+          fi
+          echo "VSP Gate PASSED"
