@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: VSP Security Gate
         run: |
-          RESULT=$(curl -s -X POST \
+          RESULT=$(curl -sk -X POST \
             -H "X-API-Key: ${{ secrets.VSP_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d "{\"repo\":\"$GITHUB_REPOSITORY\",\"sha\":\"$GITHUB_SHA\",\"branch\":\"$GITHUB_REF_NAME\"}" \
