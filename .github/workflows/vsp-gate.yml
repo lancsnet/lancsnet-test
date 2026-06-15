@@ -16,7 +16,7 @@ jobs:
             -H "X-API-Key: ${{ secrets.VSP_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d "{\"repo\":\"$GITHUB_REPOSITORY\",\"sha\":\"$GITHUB_SHA\",\"branch\":\"$GITHUB_REF_NAME\"}" \
-            https://vsp.linksafe.vn/api/v1/cicd/pr-gate/webhook)
+            https://vsp.linksafe.vn:30800/api/v1/cicd/pr-gate/webhook)
           echo "VSP Gate result: $RESULT"
           GATE=$(echo $RESULT | python3 -c "import sys,json; print(json.load(sys.stdin).get('gate','PASS'))" 2>/dev/null)
           if [ "$GATE" = "FAIL" ]; then
