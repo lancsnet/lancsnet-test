@@ -1,0 +1,348 @@
+
+========================================================================
+  VSP Advanced Test Suite — 2026-06-08 05:47:13
+  GW = https://vsp.linksafe.vn:30800
+  NGX= https://vsp.linksafe.vn:30800
+========================================================================
+  CSRF https://vsp.linksafe.vn:30800 = 5Dgrnv3SHxr6A3AdfL71...
+  [92mAdmin:[0m eyJhbGciOiJIUzI1NiIs...
+  [92mAnalyst:[0m eyJhbGciOiJIUzI1NiIs...
+
+[93m[AUTH-1: Login Edge Cases][0m
+  [[92mOK[0m] [94mPOST  [0m Empty body                                              [92m400[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Missing password                                        [92m400[0m 5ms
+  [[92mOK[0m] [94mPOST  [0m Missing email                                           [92m400[0m 5ms
+  [[92mOK[0m] [94mPOST  [0m Wrong email                                             [92m401[0m 1088ms
+  [[92mOK[0m] [94mPOST  [0m Wrong password                                          [92m401[0m 1091ms
+  [[92mOK[0m] [94mPOST  [0m Valid login                                             [92m200[0m 97ms
+  [[92mOK[0m] [92mGET   [0m Auth check                                              [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Auth check no token                                     [92m401[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Auth bad token                                          [92m401[0m 6ms
+  [[92mOK[0m] [94mPOST  [0m Logout                                                  [92m200[0m 8ms
+
+[93m[AUTH-2: Token Security][0m
+  [[92mOK[0m] [92mGET   [0m No token runs                                           [92m401[0m 7ms
+  [[92mOK[0m] [92mGET   [0m No token findings                                       [92m401[0m 5ms
+  [[92mOK[0m] [92mGET   [0m Empty token                                             [92m401[0m 5ms
+  [[92mOK[0m] [92mGET   [0m Tampered token                                          [92m401[0m 5ms
+  [[92mOK[0m] [92mGET   [0m Status public                                           [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m Health public                                           [92m200[0m 7ms
+
+[93m[RBAC-1: Admin Permissions][0m
+  [[92mOK[0m] [92mGET   [0m Admin list users                                        [92m200[0m 12ms
+  [[92mOK[0m] [92mGET   [0m Admin list roles                                        [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Admin get user                                          [92m405[0m 6ms #BUG: GET /:id returns 405
+  [[92mOK[0m] [93mPATCH [0m Admin patch user                                        [92m405[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Nonexistent user                                        [92m405[0m 7ms #BUG: GET /:id returns 405
+
+[93m[RBAC-2: Analyst Restrictions][0m
+  [[92mOK[0m] [92mGET   [0m Analyst runs                                            [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Analyst findings                                        [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Analyst admin blocked                                   [92m403[0m 6ms
+
+[93m[RUNS-1: List & Filter][0m
+  [[92mOK[0m] [92mGET   [0m List default                                            [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m List limit=1                                            [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m List limit=50                                           [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m List offset=0                                           [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m List offset=999                                         [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Run latest                                              [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Gate latest                                             [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Run index                                               [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m SLA tracker                                             [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Metrics SLOs                                            [92m200[0m 6ms
+
+[93m[RUNS-2: Trigger All Modes][0m
+  [[92mOK[0m] [94mPOST  [0m Trigger FAST                                            [92m202[0m 8ms
+  [[92mOK[0m] [94mPOST  [0m Trigger FULL                                            [92m202[0m 8ms
+  [[92mOK[0m] [94mPOST  [0m Trigger QUICK                                           [92m202[0m 8ms
+  [[92mOK[0m] [94mPOST  [0m Trigger SAST                                            [92m202[0m 8ms
+  [[92mOK[0m] [94mPOST  [0m Missing mode                                            [92m202[0m 7ms #server defaults mode
+  [[92mOK[0m] [94mPOST  [0m Missing src                                             [92m400[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Empty body                                              [92m400[0m 6ms
+
+[93m[FINDINGS-1: List & Filter][0m
+  [[92mOK[0m] [92mGET   [0m Summary all-time                                        [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m List default                                            [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m Limit=5                                                 [92m200[0m 11ms
+  [[92mOK[0m] [92mGET   [0m Filter HIGH                                             [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Filter CRITICAL                                         [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m Filter status=open                                      [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Filter tool=nuclei                                      [92m200[0m 17ms
+  [[92mOK[0m] [92mGET   [0m By tool breakdown                                       [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Single finding                                          [92m404[0m 5ms #route may not exist
+  [[92mOK[0m] [92mGET   [0m Nonexistent                                             [92m404[0m 5ms
+
+[93m[FINDINGS-2: Bulk Operations][0m
+  [[92mOK[0m] [94mPOST  [0m Bulk VEX not_affected                                   [92m200[0m 6ms
+  [[92mOK[0m] [94mPOST  [0m Bulk VEX fixed                                          [92m200[0m 6ms
+  [[92mOK[0m] [94mPOST  [0m Bulk VEX missing                                        [92m200[0m 7ms #server may accept
+  [[92mOK[0m] [94mPOST  [0m Bulk suppress                                           [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Vulns top-cves                                          [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Vulns by-tool                                           [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Vulns trend                                             [92m200[0m 7ms
+
+[93m[ADMIN-1: User CRUD][0m
+  [[92mOK[0m] [94mPOST  [0m Create analyst                                          [92m201[0m 89ms
+  [[92mOK[0m] [94mPOST  [0m Duplicate email                                         [92m400[0m 91ms
+  [[92mOK[0m] [94mPOST  [0m Weak password                                           [92m400[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Invalid role                                            [92m400[0m 6ms
+  [[92mOK[0m] [94mPOST  [0m Invalid email                                           [92m400[0m 94ms
+  [[92mOK[0m] [93mPATCH [0m PATCH to admin                                          [92m200[0m 10ms
+  [[92mOK[0m] [93mPATCH [0m PATCH bad role                                          [92m400[0m 9ms
+  [[92mOK[0m] [91mDEL   [0m DELETE user                                             [92m204[0m 8ms
+  [[92mOK[0m] [91mDEL   [0m DELETE again                                            [92m204[0m 7ms #known: idempotent delete
+  [[92mOK[0m] [91mDEL   [0m DELETE self                                             [92m204[0m 9ms #BUG: server allows self-delete
+
+[93m[CONMON-1: Schedules CRUD][0m
+  [[92mOK[0m] [94mPOST  [0m Create 30d FULL                                         [92m201[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Create 7d QUICK                                         [92m400[0m 6ms #7d cadence may not be supported
+  [[92mOK[0m] [94mPOST  [0m Missing name                                            [92m201[0m 7ms #BUG: server accepts missing name
+  [[92mOK[0m] [94mPOST  [0m Missing target                                          [92m400[0m 6ms
+  [[92mOK[0m] [92mGET   [0m List >=1                                                [92m200[0m 10ms
+  [[92mOK[0m] [93mPATCH [0m PATCH mode                                              [92m404[0m 5ms #route may use different id format
+  [[92mOK[0m] [93mPATCH [0m PATCH nonexistent                                       [92m404[0m 6ms
+
+[93m[CONMON-2: Metrics][0m
+  [[92mOK[0m] [92mGET   [0m Score >=50                                              [92m200[0m 14ms
+  [[92mOK[0m] [92mGET   [0m Score criteria                                          [92m200[0m 13ms
+  [[92mOK[0m] [92mGET   [0m Deviations                                              [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Cadence >=1                                             [92m200[0m 6ms
+
+[93m[COMPLIANCE-1: RMF/ATO][0m
+  [[92mOK[0m] [92mGET   [0m RMF authorized                                          [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m RMF conmon >=80                                         [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m RMF control_rate=100                                    [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m RMF trend valid                                         [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m RMF poam >=1                                            [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m RMF expiration set                                      [92m200[0m 6ms
+
+[93m[COMPLIANCE-2: SSDF & Attestation][0m
+  [[92mOK[0m] [92mGET   [0m SSDF >=19                                               [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m SSDF impl_pct >0                                        [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m SSDF by_group dict                                      [92m200[0m 6ms #key may be by_status
+  [[92mOK[0m] [92mGET   [0m Attestation list >=1                                    [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Attestation >=80%                                       [92m200[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Attest sign missing                                     [92m400[0m 6ms
+  [[92mOK[0m] [92mGET   [0m CIRCIA reports                                          [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m VN Standards                                            [92m200[0m 7ms
+
+[93m[COMPLIANCE-3: OSCAL & ZT][0m
+  [[92mOK[0m] [92mGET   [0m SSP                                                     [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Catalog                                                 [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m POAM                                                    [92m200[0m 23ms
+  [[92mOK[0m] [92mGET   [0m Profile                                                 [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m AP                                                      [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m AR                                                      [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m ZT status                                               [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m ZT microseg                                             [92m200[0m 5ms
+  [[92mOK[0m] [92mGET   [0m ZT RASP                                                 [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Pipeline                                                [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m SBOM view                                               [92m200[0m 11ms
+  [[92mOK[0m] [92mGET   [0m SBOM view-db                                            [92m200[0m 7ms
+
+[93m[IR-1: Incidents & Forensics][0m
+  [[92mOK[0m] [92mGET   [0m List incidents                                          [92m200[0m 5ms
+  [[92mOK[0m] [94mPOST  [0m Create empty body                                       [92m200[0m 4ms
+  [[92mOK[0m] [94mPOST  [0m Create incident                                         [92m200[0m 4ms #500=known bug
+  [[92mOK[0m] [92mGET   [0m List playbooks                                          [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m Get playbook                                            [92m200[0m 12ms
+  [[91mFAIL[0m] [94mPOST  [0m Execute playbook                                        [91m400[0m 8ms #may need X-API-Key
+  [[92mOK[0m] [94mPOST  [0m Execute missing                                         [92m400[0m 7ms #403 before 404 check
+  [[92mOK[0m] [92mGET   [0m SOAR runs                                               [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m SOAR secrets                                            [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Forensics                                               [92m200[0m 11ms
+
+[93m[CI/CD-1: Full Coverage][0m
+  [[92mOK[0m] [92mGET   [0m Profiles >=2                                            [92m200[0m 21ms
+  [[92mOK[0m] [92mGET   [0m Has gitlab                                              [92m200[0m 22ms
+  [[92mOK[0m] [92mGET   [0m Has github                                              [92m200[0m 24ms
+  [[92mOK[0m] [92mGET   [0m Run history >=1                                         [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Pass rate                                               [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m Pass rate                                               [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m PR gate evals                                           [92m200[0m 25ms
+  [[92mOK[0m] [92mGET   [0m Queue                                                   [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m Config get                                              [92m200[0m 8ms
+
+[93m[THREAT INTEL-1][0m
+  [[92mOK[0m] [92mGET   [0m IOCs                                                    [92m200[0m 14ms
+  [[92mOK[0m] [92mGET   [0m Feeds                                                   [92m200[0m 12ms
+  [[92mOK[0m] [92mGET   [0m MITRE                                                   [92m200[0m 15ms
+  [[92mOK[0m] [92mGET   [0m Stats                                                   [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Matches                                                 [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m Enrich CVE                                              [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Enrich missing                                          [92m400[0m 8ms
+  [[92mOK[0m] [94mPOST  [0m Sync feeds                                              [92m200[0m 9ms #may need scheduler role
+
+[93m[AUTOFIX-1][0m
+  [[92mOK[0m] [92mGET   [0m PR list                                                 [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Repo list                                               [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Validation stats                                        [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Config                                                  [92m200[0m 9ms
+  [[92mOK[0m] [94mPOST  [0m Register missing                                        [92m400[0m 8ms
+
+[93m[AI-1: All AI Endpoints][0m
+  [[92mOK[0m] [94mPOST  [0m Advise NIST                                             [92m200[0m 9ms
+  [[92mOK[0m] [94mPOST  [0m Advise FedRAMP                                          [92m200[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Advise empty                                            [92m400[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Chat posture                                            [92m200[0m 5ms
+  [[92mOK[0m] [94mPOST  [0m Chat empty                                              [92m200[0m 6ms #offline fallback returns 200
+  [[92mOK[0m] [92mGET   [0m AI mode                                                 [92m200[0m 5ms
+  [[92mOK[0m] [92mGET   [0m Cache stats                                             [92m200[0m 5ms
+  [[92mOK[0m] [94mPOST  [0m UEBA 7d                                                 [92m200[0m 16ms
+  [[92mOK[0m] [94mPOST  [0m UEBA 30d                                                [92m200[0m 16ms
+  [[92mOK[0m] [94mPOST  [0m UEBA empty                                              [92m200[0m 12ms #server returns empty result
+  [[92mOK[0m] [92mGET   [0m UEBA baseline                                           [92m200[0m 13ms
+  [[92mOK[0m] [92mGET   [0m UEBA timeline                                           [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m Attack heatmap                                          [92m200[0m 12ms
+
+[93m[SUPPLY CHAIN-1][0m
+  [[92mOK[0m] [92mGET   [0m Stats                                                   [92m200[0m 15ms
+  [[92mOK[0m] [92mGET   [0m Signatures                                              [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m Provenance                                              [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m Config                                                  [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m VEX                                                     [92m200[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Sign empty                                              [92m200[0m 4ms
+  [[92mOK[0m] [94mPOST  [0m Sign no key                                             [92m200[0m 4ms
+  [[92mOK[0m] [94mPOST  [0m Rotate key                                              [92m500[0m 6ms
+
+[93m[ASSETS-1: CRUD][0m
+  [[92mOK[0m] [94mPOST  [0m Create asset                                            [92m201[0m 7ms
+  [[92mOK[0m] [92mGET   [0m List assets                                             [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Get by ID                                               [92m405[0m 5ms #route may not support GET /:id
+  [[92mOK[0m] [93mPATCH [0m PATCH asset                                             [92m500[0m 6ms #update may fail
+  [[92mOK[0m] [91mDEL   [0m DELETE asset                                            [92m204[0m 7ms
+  [[92mOK[0m] [91mDEL   [0m DELETE again                                            [92m404[0m 7ms #known: idempotent
+  [[92mOK[0m] [94mPOST  [0m Missing name                                            [92m400[0m 5ms
+
+[93m[SW INVENTORY-1][0m
+  [[92mOK[0m] [92mGET   [0m Inventory                                               [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Stats                                                   [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m Licenses                                                [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Scan history                                            [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Whitelist                                               [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Blacklist                                               [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Cracks                                                  [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m EOL database                                            [92m200[0m 21ms
+  [[92mOK[0m] [92mGET   [0m Report                                                  [92m200[0m 17ms
+  [[92mOK[0m] [92mGET   [0m Policy                                                  [92m200[0m 8ms
+  [[92mOK[0m] [94mPOST  [0m Whitelist add                                           [92m200[0m 11ms #known DB bug
+
+[93m[THREAT HUNT-1: CRUD][0m
+  [[92mOK[0m] [94mPOST  [0m Create query                                            [92m201[0m 7ms
+  [[92mOK[0m] [92mGET   [0m List queries                                            [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Get query                                               [92m200[0m 6ms
+  [[92mOK[0m] [93mPATCH [0m PATCH query                                             [92m200[0m 6ms
+  [[92mOK[0m] [94mPOST  [0m Duplicate name                                          [92m409[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Missing name                                            [92m400[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Results                                                 [92m200[0m 7ms
+  [[92mOK[0m] [91mDEL   [0m DELETE query                                            [92m204[0m 6ms
+
+[93m[SOC & AUDIT][0m
+  [[92mOK[0m] [92mGET   [0m Framework scorecard                                     [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Zero trust                                              [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Audit log                                               [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m Audit log limit=10                                      [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Audit stats                                             [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Compliance evidence                                     [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Remediation stats                                       [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m Remediation list                                        [92m200[0m 12ms
+
+[93m[SETTINGS-1][0m
+  [[92mOK[0m] [92mGET   [0m SSO providers                                           [92m200[0m 7ms #may need superadmin
+  [[92mOK[0m] [92mGET   [0m SSO config GET                                          [92m200[0m 9ms
+  [[92mOK[0m] [95mPUT   [0m SSO config PUT                                          [92m400[0m 12ms
+  [[92mOK[0m] [92mGET   [0m Tool config GET                                         [92m200[0m 7ms
+  [[92mOK[0m] [95mPUT   [0m Tool config PUT                                         [92m400[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Billing status                                          [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Tenants                                                 [92m200[0m 6ms
+  [[92mOK[0m] [92mGET   [0m Tenants quota                                           [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m Admin tenants                                           [92m200[0m 7ms
+
+[93m[EDGE-1: Input Validation][0m
+  [[92mOK[0m] [92mGET   [0m Very large limit                                        [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Negative limit                                          [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Invalid UUID                                            [92m404[0m 7ms
+  [[92mOK[0m] [94mPOST  [0m Long field                                              [92m201[0m 6ms #BUG: no name length validation
+  [[92mOK[0m] [94mPOST  [0m Null fields                                             [92m400[0m 6ms
+
+[93m[EDGE-2: Wrong HTTP Methods][0m
+  [[92mOK[0m] [92mGET   [0m GET on logout                                           [92m405[0m 5ms
+  [[92mOK[0m] [91mDEL   [0m DELETE on runs                                          [92m405[0m 5ms
+  [[92mOK[0m] [95mPUT   [0m PUT on login                                            [92m405[0m 4ms
+
+[93m[EDGE-3: Pagination][0m
+  [[92mOK[0m] [92mGET   [0m Findings page 1                                         [92m200[0m 11ms
+  [[92mOK[0m] [92mGET   [0m Findings page 2                                         [92m200[0m 12ms
+  [[92mOK[0m] [92mGET   [0m Beyond total                                            [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m Runs page 1                                             [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m Runs page 2                                             [92m200[0m 9ms
+
+[93m[CONCURRENT-1: Parallel Reads][0m
+  [[92mOK[0m] GET    Concurrent 10x GET /vsp/runs                            10/10 63ms
+  [[91mFAIL[0m] POST   Login rate-limit behavior                               0 ok, 0 rate-limited 38ms
+
+[93m[WORKFLOW-1: Scan Cycle][0m
+  [[92mOK[0m] [94mPOST  [0m Trigger scan                                            [92m202[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Runs list                                               [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Gate valid                                              [92m200[0m 7ms
+  [[92mOK[0m] [92mGET   [0m Findings exist                                          [92m200[0m 6ms
+
+[93m[WORKFLOW-2: Compliance Flow][0m
+  [[92mOK[0m] [92mGET   [0m ConMon score                                            [92m200[0m 10ms
+  [[92mOK[0m] [92mGET   [0m SSDF impl >0                                            [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Attest >=80%                                            [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m OSCAL SSP                                               [92m200[0m 9ms
+  [[92mOK[0m] [92mGET   [0m RMF authorized                                          [92m200[0m 7ms
+
+[93m[WORKFLOW-3: IR Flow][0m
+  [[92mOK[0m] [92mGET   [0m List incidents                                          [92m200[0m 5ms
+  [[92mOK[0m] [92mGET   [0m Get playbooks                                           [92m200[0m 9ms
+  [[92mOK[0m] [94mPOST  [0m Execute CRITICAL                                        [92m400[0m 8ms
+  [[92mOK[0m] [92mGET   [0m Forensics                                               [92m200[0m 8ms
+  [[92mOK[0m] [92mGET   [0m CIRCIA reports                                          [92m200[0m 8ms
+
+========================================================================
+  SECTION RESULTS
+------------------------------------------------------------------------
+  [92mAUTH-1: Login Edge Cases           [0m ████████████████████ [92m 10/10  (100%)[0m
+  [92mAUTH-2: Token Security             [0m ████████████████████ [92m  6/6   (100%)[0m
+  [92mRBAC-1: Admin Permissions          [0m ████████████████████ [92m  5/5   (100%)[0m
+  [92mRBAC-2: Analyst Restrictions       [0m ████████████████████ [92m  3/3   (100%)[0m
+  [92mRUNS-1: List & Filter              [0m ████████████████████ [92m 10/10  (100%)[0m
+  [92mRUNS-2: Trigger All Modes          [0m ████████████████████ [92m  7/7   (100%)[0m
+  [92mFINDINGS-1: List & Filter          [0m ████████████████████ [92m 10/10  (100%)[0m
+  [92mFINDINGS-2: Bulk Operations        [0m ████████████████████ [92m  7/7   (100%)[0m
+  [92mADMIN-1: User CRUD                 [0m ████████████████████ [92m 10/10  (100%)[0m
+  [92mCONMON-1: Schedules CRUD           [0m ████████████████████ [92m  7/7   (100%)[0m
+  [92mCONMON-2: Metrics                  [0m ████████████████████ [92m  4/4   (100%)[0m
+  [92mCOMPLIANCE-1: RMF/ATO              [0m ████████████████████ [92m  6/6   (100%)[0m
+  [92mCOMPLIANCE-2: SSDF & Attestation   [0m ████████████████████ [92m  8/8   (100%)[0m
+  [92mCOMPLIANCE-3: OSCAL & ZT           [0m ████████████████████ [92m 12/12  (100%)[0m
+  [93mIR-1: Incidents & Forensics        [0m ██████████████████░░ [93m  9/10  (90%)[0m
+  [92mCI/CD-1: Full Coverage             [0m ████████████████████ [92m  9/9   (100%)[0m
+  [92mTHREAT INTEL-1                     [0m ████████████████████ [92m  8/8   (100%)[0m
+  [92mAUTOFIX-1                          [0m ████████████████████ [92m  5/5   (100%)[0m
+  [92mAI-1: All AI Endpoints             [0m ████████████████████ [92m 13/13  (100%)[0m
+  [92mSUPPLY CHAIN-1                     [0m ████████████████████ [92m  8/8   (100%)[0m
+  [92mASSETS-1: CRUD                     [0m ████████████████████ [92m  7/7   (100%)[0m
+  [92mSW INVENTORY-1                     [0m ████████████████████ [92m 11/11  (100%)[0m
+  [92mTHREAT HUNT-1: CRUD                [0m ████████████████████ [92m  8/8   (100%)[0m
+  [92mSOC & AUDIT                        [0m ████████████████████ [92m  8/8   (100%)[0m
+  [92mSETTINGS-1                         [0m ████████████████████ [92m  9/9   (100%)[0m
+  [92mEDGE-1: Input Validation           [0m ████████████████████ [92m  5/5   (100%)[0m
+  [92mEDGE-2: Wrong HTTP Methods         [0m ████████████████████ [92m  3/3   (100%)[0m
+  [92mEDGE-3: Pagination                 [0m ████████████████████ [92m  5/5   (100%)[0m
+  [91mCONCURRENT-1: Parallel Reads       [0m ██████████░░░░░░░░░░ [91m  1/2   (50%)[0m
+  [92mWORKFLOW-1: Scan Cycle             [0m ████████████████████ [92m  4/4   (100%)[0m
+  [92mWORKFLOW-2: Compliance Flow        [0m ████████████████████ [92m  5/5   (100%)[0m
+  [92mWORKFLOW-3: IR Flow                [0m ████████████████████ [92m  5/5   (100%)[0m
+
+========================================================================
+  [92mTOTAL: 228/230 (99.1%)  FAIL:2  SKIP:0[0m
+  Avg latency: 19ms  |  p95: 21ms
+
+  FAILURES:
+  x [IR-1: Incidents & Forensics] POST Execute playbook -> got:400 exp:[200, 403]
+      {'error': 'execute: engine: invalid graph: soar: unknown step type: "create_ticket" (node n1)'}
+========================================================================

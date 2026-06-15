@@ -1,0 +1,1 @@
+../vsp_email_panel.js

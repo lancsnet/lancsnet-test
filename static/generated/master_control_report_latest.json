@@ -1,0 +1,61 @@
+{
+  "report_name": "VSP Master Control Report",
+  "project": "GOLANG_VSP",
+  "status": "PASS",
+  "generated_at": "2026-05-27T08:30:07.544144+00:00",
+  "control_groups": {
+    "CI/CD Security Control": {
+      "status": "PASS",
+      "evidence_dir": "/home/test/Data/GOLANG_VSP/out_ci/CICD_FINAL_CONTROL_REPORT_20260527_150604",
+      "result_file": "/home/test/Data/GOLANG_VSP/out_ci/MASTER_CONTROL_REPORT_20260527_153007/cicd_control_result.json",
+      "key_checks": [
+        "CICD-01 Blocked PRs API/UI integration",
+        "CICD-02 SLA escalation worker timer",
+        "CICD-03 GitLab token and project access"
+      ]
+    },
+    "Audit Compliance Control": {
+      "status": "PASS",
+      "evidence_dir": "/home/test/Data/GOLANG_VSP/out_ci/AUDIT_COMPLIANCE_FINAL_REPORT_20260527_152333",
+      "result_file": "/home/test/Data/GOLANG_VSP/out_ci/MASTER_CONTROL_REPORT_20260527_153007/audit_control_result.json",
+      "key_checks": [
+        "Audit endpoints authentication guard",
+        "Audit repair no-auth protection",
+        "Audit non-login/admin action sample",
+        "Audit hash chain integrity"
+      ]
+    },
+    "Policy Gate Control": {
+      "status": "PASS",
+      "evidence_dir": "/home/test/Data/GOLANG_VSP/out_ci/POLICY_GATE_FINAL_FIX_20260527_152713",
+      "result_file": "/home/test/Data/GOLANG_VSP/out_ci/MASTER_CONTROL_REPORT_20260527_153007/policy_gate_result.json",
+      "key_checks": [
+        "Policy rules API",
+        "Policy evaluate API",
+        "No duplicate policy rules",
+        "min_score normalized",
+        "Policy final health API"
+      ]
+    }
+  },
+  "executive_summary": {
+    "total_control_groups": 3,
+    "passed": 3,
+    "failed": 0,
+    "poc_readiness": "READY_FOR_REVIEW"
+  },
+  "acceptance_criteria": [
+    "All child control groups must have status PASS.",
+    "Each control group must provide result.json evidence.",
+    "CI/CD must include API, SLA worker, and GitLab verification evidence.",
+    "Audit must include auth guard, non-login audit action, and hash-chain integrity evidence.",
+    "Policy Gate must include rules/evaluate API, no duplicates, normalized min_score, and final-health evidence."
+  ],
+  "evidence_files": {
+    "master_result": "/home/test/Data/GOLANG_VSP/out_ci/MASTER_CONTROL_REPORT_20260527_153007/result.json",
+    "summary_markdown": "/home/test/Data/GOLANG_VSP/out_ci/MASTER_CONTROL_REPORT_20260527_153007/MASTER_CONTROL_REPORT.md",
+    "cicd_result": "/home/test/Data/GOLANG_VSP/out_ci/MASTER_CONTROL_REPORT_20260527_153007/cicd_control_result.json",
+    "audit_result": "/home/test/Data/GOLANG_VSP/out_ci/MASTER_CONTROL_REPORT_20260527_153007/audit_control_result.json",
+    "policy_result": "/home/test/Data/GOLANG_VSP/out_ci/MASTER_CONTROL_REPORT_20260527_153007/policy_gate_result.json"
+  }
+}

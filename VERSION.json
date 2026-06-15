@@ -1,0 +1,10 @@
+{
+  "version": "4.9.0",
+  "build_date": "2026-06-01T13:06:48Z",
+  "go_version": "go1.25.10",
+  "git_commit": "e561823",
+  "platform": "linux/amd64",
+  "cgo_enabled": true,
+  "dependencies": ["libpcap >= 1.10", "postgresql >= 14", "redis >= 7"],
+  "license": "Ed25519 signed license required"
+}

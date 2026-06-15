@@ -1,0 +1,5 @@
+{"runs" : [{"id":"RUN-0996","status":"warn","score":75,"pass":0,"fail":0,"total":0,"trigger_type":"schedule","started_at":"2026-05-05T06:07:54.829447+00:00","completed_at":"2026-05-05T06:08:46.829447+00:00"}, 
+ {"id":"RUN-0997","status":"warn","score":75,"pass":0,"fail":0,"total":0,"trigger_type":"schedule","started_at":"2026-05-12T06:07:54.829447+00:00","completed_at":"2026-05-12T06:08:46.829447+00:00"}, 
+ {"id":"RUN-0998","status":"warn","score":75,"pass":0,"fail":0,"total":0,"trigger_type":"schedule","started_at":"2026-05-19T06:07:54.829447+00:00","completed_at":"2026-05-19T06:08:46.829447+00:00"}, 
+ {"id":"RUN-0999","status":"warn","score":75,"pass":0,"fail":0,"total":0,"trigger_type":"schedule","started_at":"2026-05-26T06:07:54.829447+00:00","completed_at":"2026-05-26T06:08:46.829447+00:00"}, 
+ {"id":"RUN-1000","status":"pass","score":75,"pass":0,"fail":0,"total":0,"trigger_type":"commit","started_at":"2026-06-02T06:04:54.829447+00:00","completed_at":"2026-06-02T06:05:54.829447+00:00"}], "total" : 5}

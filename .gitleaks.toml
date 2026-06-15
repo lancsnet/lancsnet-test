@@ -1,0 +1,7 @@
+title = "VSP gitleaks"
+[extend]
+useDefault = true
+[allowlist]
+description = "test fixtures khong phai credential that"
+regexTarget = "line"
+regexes = ['''fake_tok\s*=''']

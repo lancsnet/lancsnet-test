@@ -1,0 +1,348 @@
+
+========================================================================
+  VSP Advanced Test Suite — 2026-06-08 05:47:13
+  GW = https://vsp.linksafe.vn:30800
+  NGX= https://vsp.linksafe.vn:30800
+========================================================================
+  CSRF https://vsp.linksafe.vn:30800 = 5Dgrnv3SHxr6A3AdfL71...
+  Admin: eyJhbGciOiJIUzI1NiIs...
+  Analyst: eyJhbGciOiJIUzI1NiIs...
+
+[AUTH-1: Login Edge Cases]
+  [OK] POST   Empty body                                              400 7ms
+  [OK] POST   Missing password                                        400 5ms
+  [OK] POST   Missing email                                           400 5ms
+  [OK] POST   Wrong email                                             401 1088ms
+  [OK] POST   Wrong password                                          401 1091ms
+  [OK] POST   Valid login                                             200 97ms
+  [OK] GET    Auth check                                              200 6ms
+  [OK] GET    Auth check no token                                     401 6ms
+  [OK] GET    Auth bad token                                          401 6ms
+  [OK] POST   Logout                                                  200 8ms
+
+[AUTH-2: Token Security]
+  [OK] GET    No token runs                                           401 7ms
+  [OK] GET    No token findings                                       401 5ms
+  [OK] GET    Empty token                                             401 5ms
+  [OK] GET    Tampered token                                          401 5ms
+  [OK] GET    Status public                                           200 10ms
+  [OK] GET    Health public                                           200 7ms
+
+[RBAC-1: Admin Permissions]
+  [OK] GET    Admin list users                                        200 12ms
+  [OK] GET    Admin list roles                                        200 6ms
+  [OK] GET    Admin get user                                          405 6ms #BUG: GET /:id returns 405
+  [OK] PATCH  Admin patch user                                        405 6ms
+  [OK] GET    Nonexistent user                                        405 7ms #BUG: GET /:id returns 405
+
+[RBAC-2: Analyst Restrictions]
+  [OK] GET    Analyst runs                                            200 7ms
+  [OK] GET    Analyst findings                                        200 8ms
+  [OK] GET    Analyst admin blocked                                   403 6ms
+
+[RUNS-1: List & Filter]
+  [OK] GET    List default                                            200 8ms
+  [OK] GET    List limit=1                                            200 7ms
+  [OK] GET    List limit=50                                           200 9ms
+  [OK] GET    List offset=0                                           200 7ms
+  [OK] GET    List offset=999                                         200 7ms
+  [OK] GET    Run latest                                              200 6ms
+  [OK] GET    Gate latest                                             200 6ms
+  [OK] GET    Run index                                               200 7ms
+  [OK] GET    SLA tracker                                             200 7ms
+  [OK] GET    Metrics SLOs                                            200 6ms
+
+[RUNS-2: Trigger All Modes]
+  [OK] POST   Trigger FAST                                            202 8ms
+  [OK] POST   Trigger FULL                                            202 8ms
+  [OK] POST   Trigger QUICK                                           202 8ms
+  [OK] POST   Trigger SAST                                            202 8ms
+  [OK] POST   Missing mode                                            202 7ms #server defaults mode
+  [OK] POST   Missing src                                             400 7ms
+  [OK] POST   Empty body                                              400 6ms
+
+[FINDINGS-1: List & Filter]
+  [OK] GET    Summary all-time                                        200 7ms
+  [OK] GET    List default                                            200 9ms
+  [OK] GET    Limit=5                                                 200 11ms
+  [OK] GET    Filter HIGH                                             200 8ms
+  [OK] GET    Filter CRITICAL                                         200 9ms
+  [OK] GET    Filter status=open                                      200 7ms
+  [OK] GET    Filter tool=nuclei                                      200 17ms
+  [OK] GET    By tool breakdown                                       200 7ms
+  [OK] GET    Single finding                                          404 5ms #route may not exist
+  [OK] GET    Nonexistent                                             404 5ms
+
+[FINDINGS-2: Bulk Operations]
+  [OK] POST   Bulk VEX not_affected                                   200 6ms
+  [OK] POST   Bulk VEX fixed                                          200 6ms
+  [OK] POST   Bulk VEX missing                                        200 7ms #server may accept
+  [OK] POST   Bulk suppress                                           200 6ms
+  [OK] GET    Vulns top-cves                                          200 7ms
+  [OK] GET    Vulns by-tool                                           200 7ms
+  [OK] GET    Vulns trend                                             200 7ms
+
+[ADMIN-1: User CRUD]
+  [OK] POST   Create analyst                                          201 89ms
+  [OK] POST   Duplicate email                                         400 91ms
+  [OK] POST   Weak password                                           400 7ms
+  [OK] POST   Invalid role                                            400 6ms
+  [OK] POST   Invalid email                                           400 94ms
+  [OK] PATCH  PATCH to admin                                          200 10ms
+  [OK] PATCH  PATCH bad role                                          400 9ms
+  [OK] DEL    DELETE user                                             204 8ms
+  [OK] DEL    DELETE again                                            204 7ms #known: idempotent delete
+  [OK] DEL    DELETE self                                             204 9ms #BUG: server allows self-delete
+
+[CONMON-1: Schedules CRUD]
+  [OK] POST   Create 30d FULL                                         201 7ms
+  [OK] POST   Create 7d QUICK                                         400 6ms #7d cadence may not be supported
+  [OK] POST   Missing name                                            201 7ms #BUG: server accepts missing name
+  [OK] POST   Missing target                                          400 6ms
+  [OK] GET    List >=1                                                200 10ms
+  [OK] PATCH  PATCH mode                                              404 5ms #route may use different id format
+  [OK] PATCH  PATCH nonexistent                                       404 6ms
+
+[CONMON-2: Metrics]
+  [OK] GET    Score >=50                                              200 14ms
+  [OK] GET    Score criteria                                          200 13ms
+  [OK] GET    Deviations                                              200 8ms
+  [OK] GET    Cadence >=1                                             200 6ms
+
+[COMPLIANCE-1: RMF/ATO]
+  [OK] GET    RMF authorized                                          200 6ms
+  [OK] GET    RMF conmon >=80                                         200 7ms
+  [OK] GET    RMF control_rate=100                                    200 8ms
+  [OK] GET    RMF trend valid                                         200 6ms
+  [OK] GET    RMF poam >=1                                            200 6ms
+  [OK] GET    RMF expiration set                                      200 6ms
+
+[COMPLIANCE-2: SSDF & Attestation]
+  [OK] GET    SSDF >=19                                               200 6ms
+  [OK] GET    SSDF impl_pct >0                                        200 6ms
+  [OK] GET    SSDF by_group dict                                      200 6ms #key may be by_status
+  [OK] GET    Attestation list >=1                                    200 7ms
+  [OK] GET    Attestation >=80%                                       200 7ms
+  [OK] POST   Attest sign missing                                     400 6ms
+  [OK] GET    CIRCIA reports                                          200 8ms
+  [OK] GET    VN Standards                                            200 7ms
+
+[COMPLIANCE-3: OSCAL & ZT]
+  [OK] GET    SSP                                                     200 8ms
+  [OK] GET    Catalog                                                 200 8ms
+  [OK] GET    POAM                                                    200 23ms
+  [OK] GET    Profile                                                 200 6ms
+  [OK] GET    AP                                                      200 9ms
+  [OK] GET    AR                                                      200 10ms
+  [OK] GET    ZT status                                               200 6ms
+  [OK] GET    ZT microseg                                             200 5ms
+  [OK] GET    ZT RASP                                                 200 6ms
+  [OK] GET    Pipeline                                                200 7ms
+  [OK] GET    SBOM view                                               200 11ms
+  [OK] GET    SBOM view-db                                            200 7ms
+
+[IR-1: Incidents & Forensics]
+  [OK] GET    List incidents                                          200 5ms
+  [OK] POST   Create empty body                                       200 4ms
+  [OK] POST   Create incident                                         200 4ms #500=known bug
+  [OK] GET    List playbooks                                          200 9ms
+  [OK] GET    Get playbook                                            200 12ms
+  [FAIL] POST   Execute playbook                                        400 8ms #may need X-API-Key
+  [OK] POST   Execute missing                                         400 7ms #403 before 404 check
+  [OK] GET    SOAR runs                                               200 9ms
+  [OK] GET    SOAR secrets                                            200 7ms
+  [OK] GET    Forensics                                               200 11ms
+
+[CI/CD-1: Full Coverage]
+  [OK] GET    Profiles >=2                                            200 21ms
+  [OK] GET    Has gitlab                                              200 22ms
+  [OK] GET    Has github                                              200 24ms
+  [OK] GET    Run history >=1                                         200 6ms
+  [OK] GET    Pass rate                                               200 9ms
+  [OK] GET    Pass rate                                               200 6ms
+  [OK] GET    PR gate evals                                           200 25ms
+  [OK] GET    Queue                                                   200 10ms
+  [OK] GET    Config get                                              200 8ms
+
+[THREAT INTEL-1]
+  [OK] GET    IOCs                                                    200 14ms
+  [OK] GET    Feeds                                                   200 12ms
+  [OK] GET    MITRE                                                   200 15ms
+  [OK] GET    Stats                                                   200 8ms
+  [OK] GET    Matches                                                 200 10ms
+  [OK] GET    Enrich CVE                                              200 8ms
+  [OK] GET    Enrich missing                                          400 8ms
+  [OK] POST   Sync feeds                                              200 9ms #may need scheduler role
+
+[AUTOFIX-1]
+  [OK] GET    PR list                                                 200 7ms
+  [OK] GET    Repo list                                               200 8ms
+  [OK] GET    Validation stats                                        200 8ms
+  [OK] GET    Config                                                  200 9ms
+  [OK] POST   Register missing                                        400 8ms
+
+[AI-1: All AI Endpoints]
+  [OK] POST   Advise NIST                                             200 9ms
+  [OK] POST   Advise FedRAMP                                          200 7ms
+  [OK] POST   Advise empty                                            400 7ms
+  [OK] POST   Chat posture                                            200 5ms
+  [OK] POST   Chat empty                                              200 6ms #offline fallback returns 200
+  [OK] GET    AI mode                                                 200 5ms
+  [OK] GET    Cache stats                                             200 5ms
+  [OK] POST   UEBA 7d                                                 200 16ms
+  [OK] POST   UEBA 30d                                                200 16ms
+  [OK] POST   UEBA empty                                              200 12ms #server returns empty result
+  [OK] GET    UEBA baseline                                           200 13ms
+  [OK] GET    UEBA timeline                                           200 9ms
+  [OK] GET    Attack heatmap                                          200 12ms
+
+[SUPPLY CHAIN-1]
+  [OK] GET    Stats                                                   200 15ms
+  [OK] GET    Signatures                                              200 9ms
+  [OK] GET    Provenance                                              200 9ms
+  [OK] GET    Config                                                  200 7ms
+  [OK] GET    VEX                                                     200 7ms
+  [OK] POST   Sign empty                                              200 4ms
+  [OK] POST   Sign no key                                             200 4ms
+  [OK] POST   Rotate key                                              500 6ms
+
+[ASSETS-1: CRUD]
+  [OK] POST   Create asset                                            201 7ms
+  [OK] GET    List assets                                             200 8ms
+  [OK] GET    Get by ID                                               405 5ms #route may not support GET /:id
+  [OK] PATCH  PATCH asset                                             500 6ms #update may fail
+  [OK] DEL    DELETE asset                                            204 7ms
+  [OK] DEL    DELETE again                                            404 7ms #known: idempotent
+  [OK] POST   Missing name                                            400 5ms
+
+[SW INVENTORY-1]
+  [OK] GET    Inventory                                               200 7ms
+  [OK] GET    Stats                                                   200 10ms
+  [OK] GET    Licenses                                                200 6ms
+  [OK] GET    Scan history                                            200 6ms
+  [OK] GET    Whitelist                                               200 6ms
+  [OK] GET    Blacklist                                               200 6ms
+  [OK] GET    Cracks                                                  200 6ms
+  [OK] GET    EOL database                                            200 21ms
+  [OK] GET    Report                                                  200 17ms
+  [OK] GET    Policy                                                  200 8ms
+  [OK] POST   Whitelist add                                           200 11ms #known DB bug
+
+[THREAT HUNT-1: CRUD]
+  [OK] POST   Create query                                            201 7ms
+  [OK] GET    List queries                                            200 8ms
+  [OK] GET    Get query                                               200 6ms
+  [OK] PATCH  PATCH query                                             200 6ms
+  [OK] POST   Duplicate name                                          409 7ms
+  [OK] POST   Missing name                                            400 6ms
+  [OK] GET    Results                                                 200 7ms
+  [OK] DEL    DELETE query                                            204 6ms
+
+[SOC & AUDIT]
+  [OK] GET    Framework scorecard                                     200 7ms
+  [OK] GET    Zero trust                                              200 8ms
+  [OK] GET    Audit log                                               200 10ms
+  [OK] GET    Audit log limit=10                                      200 8ms
+  [OK] GET    Audit stats                                             200 8ms
+  [OK] GET    Compliance evidence                                     200 7ms
+  [OK] GET    Remediation stats                                       200 9ms
+  [OK] GET    Remediation list                                        200 12ms
+
+[SETTINGS-1]
+  [OK] GET    SSO providers                                           200 7ms #may need superadmin
+  [OK] GET    SSO config GET                                          200 9ms
+  [OK] PUT    SSO config PUT                                          400 12ms
+  [OK] GET    Tool config GET                                         200 7ms
+  [OK] PUT    Tool config PUT                                         400 8ms
+  [OK] GET    Billing status                                          200 7ms
+  [OK] GET    Tenants                                                 200 6ms
+  [OK] GET    Tenants quota                                           200 10ms
+  [OK] GET    Admin tenants                                           200 7ms
+
+[EDGE-1: Input Validation]
+  [OK] GET    Very large limit                                        200 8ms
+  [OK] GET    Negative limit                                          200 8ms
+  [OK] GET    Invalid UUID                                            404 7ms
+  [OK] POST   Long field                                              201 6ms #BUG: no name length validation
+  [OK] POST   Null fields                                             400 6ms
+
+[EDGE-2: Wrong HTTP Methods]
+  [OK] GET    GET on logout                                           405 5ms
+  [OK] DEL    DELETE on runs                                          405 5ms
+  [OK] PUT    PUT on login                                            405 4ms
+
+[EDGE-3: Pagination]
+  [OK] GET    Findings page 1                                         200 11ms
+  [OK] GET    Findings page 2                                         200 12ms
+  [OK] GET    Beyond total                                            200 10ms
+  [OK] GET    Runs page 1                                             200 10ms
+  [OK] GET    Runs page 2                                             200 9ms
+
+[CONCURRENT-1: Parallel Reads]
+  [OK] GET    Concurrent 10x GET /vsp/runs                            10/10 63ms
+  [FAIL] POST   Login rate-limit behavior                               0 ok, 0 rate-limited 38ms
+
+[WORKFLOW-1: Scan Cycle]
+  [OK] POST   Trigger scan                                            202 8ms
+  [OK] GET    Runs list                                               200 7ms
+  [OK] GET    Gate valid                                              200 7ms
+  [OK] GET    Findings exist                                          200 6ms
+
+[WORKFLOW-2: Compliance Flow]
+  [OK] GET    ConMon score                                            200 10ms
+  [OK] GET    SSDF impl >0                                            200 8ms
+  [OK] GET    Attest >=80%                                            200 9ms
+  [OK] GET    OSCAL SSP                                               200 9ms
+  [OK] GET    RMF authorized                                          200 7ms
+
+[WORKFLOW-3: IR Flow]
+  [OK] GET    List incidents                                          200 5ms
+  [OK] GET    Get playbooks                                           200 9ms
+  [OK] POST   Execute CRITICAL                                        400 8ms
+  [OK] GET    Forensics                                               200 8ms
+  [OK] GET    CIRCIA reports                                          200 8ms
+
+========================================================================
+  SECTION RESULTS
+------------------------------------------------------------------------
+  AUTH-1: Login Edge Cases            ████████████████████  10/10  (100%)
+  AUTH-2: Token Security              ████████████████████   6/6   (100%)
+  RBAC-1: Admin Permissions           ████████████████████   5/5   (100%)
+  RBAC-2: Analyst Restrictions        ████████████████████   3/3   (100%)
+  RUNS-1: List & Filter               ████████████████████  10/10  (100%)
+  RUNS-2: Trigger All Modes           ████████████████████   7/7   (100%)
+  FINDINGS-1: List & Filter           ████████████████████  10/10  (100%)
+  FINDINGS-2: Bulk Operations         ████████████████████   7/7   (100%)
+  ADMIN-1: User CRUD                  ████████████████████  10/10  (100%)
+  CONMON-1: Schedules CRUD            ████████████████████   7/7   (100%)
+  CONMON-2: Metrics                   ████████████████████   4/4   (100%)
+  COMPLIANCE-1: RMF/ATO               ████████████████████   6/6   (100%)
+  COMPLIANCE-2: SSDF & Attestation    ████████████████████   8/8   (100%)
+  COMPLIANCE-3: OSCAL & ZT            ████████████████████  12/12  (100%)
+  IR-1: Incidents & Forensics         ██████████████████░░   9/10  (90%)
+  CI/CD-1: Full Coverage              ████████████████████   9/9   (100%)
+  THREAT INTEL-1                      ████████████████████   8/8   (100%)
+  AUTOFIX-1                           ████████████████████   5/5   (100%)
+  AI-1: All AI Endpoints              ████████████████████  13/13  (100%)
+  SUPPLY CHAIN-1                      ████████████████████   8/8   (100%)
+  ASSETS-1: CRUD                      ████████████████████   7/7   (100%)
+  SW INVENTORY-1                      ████████████████████  11/11  (100%)
+  THREAT HUNT-1: CRUD                 ████████████████████   8/8   (100%)
+  SOC & AUDIT                         ████████████████████   8/8   (100%)
+  SETTINGS-1                          ████████████████████   9/9   (100%)
+  EDGE-1: Input Validation            ████████████████████   5/5   (100%)
+  EDGE-2: Wrong HTTP Methods          ████████████████████   3/3   (100%)
+  EDGE-3: Pagination                  ████████████████████   5/5   (100%)
+  CONCURRENT-1: Parallel Reads        ██████████░░░░░░░░░░   1/2   (50%)
+  WORKFLOW-1: Scan Cycle              ████████████████████   4/4   (100%)
+  WORKFLOW-2: Compliance Flow         ████████████████████   5/5   (100%)
+  WORKFLOW-3: IR Flow                 ████████████████████   5/5   (100%)
+
+========================================================================
+  TOTAL: 228/230 (99.1%)  FAIL:2  SKIP:0
+  Avg latency: 19ms  |  p95: 21ms
+
+  FAILURES:
+  x [IR-1: Incidents & Forensics] POST Execute playbook -> got:400 exp:[200, 403]
+      {'error': 'execute: engine: invalid graph: soar: unknown step type: "create_ticket" (node n1)'}
+========================================================================

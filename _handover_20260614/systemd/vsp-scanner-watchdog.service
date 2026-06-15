@@ -1,0 +1,5 @@
+[Unit]
+Description=VSP Scanner Watchdog
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/vsp-scanner-watchdog.sh

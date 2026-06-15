@@ -1,0 +1,19 @@
+/* CICD_QUALITY_REPORT_EXPORT_V17 */
+.cicd-v17-export-btn {
+  border: 1px solid rgba(130,160,210,.18);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 950;
+  cursor: pointer;
+  background: rgba(255,255,255,.055);
+  color: #dbe7f5;
+}
+
+.cicd-v17-export-btn.primary {
+  background: linear-gradient(180deg, #4d73ff, #2e55e8);
+  color: white;
+}
+
+.cicd-v17-export-btn:hover {
+  filter: brightness(1.08);
+}

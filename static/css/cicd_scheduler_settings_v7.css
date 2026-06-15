@@ -1,0 +1,166 @@
+/* CICD_SCHEDULER_SETTINGS_V7 */
+
+/* Fix white bleed after scheduler V6 */
+html,
+body {
+  background: #070b12 !important;
+}
+
+body,
+.cicd-page,
+.cicd-shell,
+.main,
+.content,
+.panel-body,
+.page,
+.app,
+#app {
+  background:
+    radial-gradient(circle at top left, rgba(58, 111, 255, 0.08), transparent 36rem),
+    radial-gradient(circle at top right, rgba(100, 255, 168, 0.05), transparent 30rem),
+    #070b12 !important;
+  color: #dbe7f5 !important;
+}
+
+.card,
+.metric-card,
+.kpi-card,
+.panel,
+.box,
+.section,
+.cicd-card {
+  background: linear-gradient(180deg, rgba(18,26,39,.98), rgba(10,16,25,.98)) !important;
+  border: 1px solid rgba(125,154,190,.16) !important;
+  color: #dbe7f5 !important;
+}
+
+.vsp-scheduler-v7-section {
+  border: 1px solid rgba(130,160,210,.16);
+  border-radius: 16px;
+  background: rgba(255,255,255,.035);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.vsp-scheduler-v7-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: #9aa9c2;
+  font-weight: 900;
+  margin-bottom: 10px;
+}
+
+.vsp-scheduler-v7-desc {
+  margin-top: -5px;
+  margin-bottom: 12px;
+  color: #7f8ea6;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.vsp-scheduler-v7-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 12px;
+}
+
+.vsp-scheduler-v7-grid .full {
+  grid-column: 1 / -1;
+}
+
+.vsp-scheduler-v7-field label {
+  display: block;
+  margin-bottom: 6px;
+  color: #91a1ba;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 900;
+}
+
+.vsp-scheduler-v7-field input,
+.vsp-scheduler-v7-field select,
+.vsp-scheduler-v7-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(6, 11, 18, .94);
+  color: #eef5ff;
+  border: 1px solid rgba(130,160,210,.22);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.vsp-scheduler-v7-field textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.vsp-scheduler-v7-field input:focus,
+.vsp-scheduler-v7-field select:focus,
+.vsp-scheduler-v7-field textarea:focus {
+  border-color: rgba(93,139,255,.68);
+  box-shadow: 0 0 0 3px rgba(93,139,255,.12);
+}
+
+.vsp-scheduler-v7-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.vsp-scheduler-v7-kpi {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(130,160,210,.14);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.vsp-scheduler-v7-kpi .num {
+  font-size: 18px;
+  font-weight: 900;
+  color: #7fea86;
+}
+
+.vsp-scheduler-v7-kpi .txt {
+  margin-top: 4px;
+  color: #8795ab;
+  font-size: 11px;
+}
+
+.vsp-scheduler-v7-chipline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vsp-scheduler-v7-chip {
+  border-radius: 999px;
+  padding: 5px 9px;
+  border: 1px solid rgba(126,234,134,.28);
+  background: rgba(126,234,134,.10);
+  color: #bfffc5;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.vsp-scheduler-v7-chip.warn {
+  border-color: rgba(255,190,90,.35);
+  background: rgba(255,190,90,.10);
+  color: #ffe2aa;
+}
+
+.vsp-scheduler-v7-chip.info {
+  border-color: rgba(95,145,255,.35);
+  background: rgba(95,145,255,.10);
+  color: #c9d9ff;
+}
+
+@media (max-width: 900px) {
+  .vsp-scheduler-v7-summary,
+  .vsp-scheduler-v7-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,34 @@
+/* CICD_ICON_RAIL_HITZONES_V20B */
+.cicd-v20b-hotzone {
+  position: fixed;
+  left: 8px;
+  width: 44px;
+  height: 38px;
+  z-index: 2147482500;
+  border-radius: 12px;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.cicd-v20b-hotzone:hover {
+  background: rgba(91,124,255,.14);
+  border-color: rgba(91,124,255,.36);
+}
+
+.cicd-v20b-hotzone.active {
+  background: rgba(91,124,255,.24);
+  border-color: rgba(126,234,134,.42);
+}
+
+.cicd-v20b-hotzone::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #7fea86;
+  box-shadow: 0 0 8px rgba(126,234,134,.75);
+}

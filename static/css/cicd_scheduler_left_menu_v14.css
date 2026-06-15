@@ -1,0 +1,27 @@
+/* CICD_SCHEDULER_LEFT_MENU_V14 */
+.v14-scheduler-menu-bound {
+  position: relative !important;
+}
+
+.v14-scheduler-menu-bound::after {
+  content: "CI/CD";
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(126,234,134,.26);
+  background: rgba(126,234,134,.10);
+  color: #9ef7a7;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.v14-scheduler-menu-bound:hover {
+  background: rgba(91,124,255,.12) !important;
+  color: #eef6ff !important;
+}
+
+.v14-scheduler-menu-active {
+  background: rgba(91,124,255,.20) !important;
+  color: #ffffff !important;
+}

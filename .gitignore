@@ -1,0 +1,15 @@
+.env
+.env.*
+*.pem
+*.key
+_quarantine_static/
+*.bak*
+node_modules/
+__pycache__/
+*.pyc
+*.log
+static/panels/csv
+bin/vsp-gateway
+bin/vsp-sw-inventory
+bin/vsp-scheduler-api
+bin/vsp-cosign-api

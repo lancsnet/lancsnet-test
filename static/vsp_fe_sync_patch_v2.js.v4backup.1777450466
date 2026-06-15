@@ -1,0 +1,847 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// VSP FE SYNC PATCH v4 — 2026-04-29 (vuln_mgmt added)
+// Extends v3 with F23-F25 (vuln_mgmt panel hardening).
+// Note: Drop-in replacement for v3; identical filename "vsp_fe_sync_patch_v2.js".
+// ═══════════════════════════════════════════════════════════════════════════
+
+(function vspFESync() {
+'use strict';
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+window._vspEscapeHtml = escapeHtml;
+
+function whenReady(check, cb, maxMs) {
+  maxMs = maxMs || 10000;
+  var t0 = Date.now();
+  var iv = setInterval(function() {
+    if (check()) { clearInterval(iv); cb(); return; }
+    if (Date.now() - t0 > maxMs) { clearInterval(iv); }
+  }, 200);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F1 — REMEDIATION POST → PATCH
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixRemediationMethod() {
+  var _origFetch = window.fetch;
+  window.fetch = function(input, init) {
+    try {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      var method = (init && init.method) || (input && input.method) || 'GET';
+      if (method.toUpperCase() === 'POST' &&
+          /\/remediation\/finding\/[^/?]+/.test(url) &&
+          !/\/auto/.test(url)) {
+        init = init || {};
+        init.method = 'PATCH';
+      }
+    } catch (e) {}
+    return _origFetch.call(this, input, init);
+  };
+  console.log('[VSP-SYNC F1] Remediation POST→PATCH wrapper');
+})();
+
+(function fixApiHelper() {
+  var _origApi = window.api;
+  if (typeof _origApi !== 'function') return;
+  window.api = function(method, path, body, noAuth) {
+    if (typeof method === 'string' && method.toUpperCase() === 'POST' &&
+        typeof path === 'string' &&
+        /\/remediation\/finding\/[^/?]+/.test(path) && !/\/auto/.test(path)) {
+      method = 'PATCH';
+    }
+    return _origApi.call(this, method, path, body, noAuth);
+  };
+  console.log('[VSP-SYNC F1b] api() PATCH-aware');
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F2 — LOGOUT backend blacklist
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixLogoutBlacklist() {
+  async function callBackendLogout(token) {
+    if (!token) return;
+    try {
+      await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: '{}', keepalive: true
+      });
+    } catch (e) { console.warn('[VSP-SYNC] logout failed:', e.message); }
+  }
+  window._vspBackendLogout = callBackendLogout;
+
+  whenReady(function() { return typeof window.profileLogout === 'function'; }, function() {
+    var _orig = window.profileLogout;
+    window.profileLogout = function() {
+      callBackendLogout(window.TOKEN || '');
+      return _orig.apply(this, arguments);
+    };
+    console.log('[VSP-SYNC F2a] profileLogout wrapped');
+  });
+
+  var _lastToken = window.TOKEN || (function() {
+    try { return localStorage.getItem('vsp_token') || ''; } catch(e) { return ''; }
+  })();
+  setInterval(function() {
+    var current = window.TOKEN || (function() {
+      try { return localStorage.getItem('vsp_token') || ''; } catch(e) { return ''; }
+    })();
+    if (_lastToken && !current) callBackendLogout(_lastToken);
+    _lastToken = current;
+  }, 1500);
+  console.log('[VSP-SYNC F2b] watcher armed');
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F3 — showToast hardened
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixShowToastXSS() {
+  whenReady(function() { return typeof window.showToast === 'function'; }, function() {
+    window.showToast = function(msg, type) {
+      type = type || 'info';
+      var icons = {success:'✓', error:'✗', warn:'⚠', info:'◉'};
+      var colors = {success:'var(--green)',error:'var(--red)',warn:'var(--amber)',info:'var(--cyan)'};
+      var container = document.getElementById('toast-container');
+      if (!container) {
+        var fb = document.createElement('div');
+        fb.style.cssText = 'position:fixed;top:20px;right:20px;background:#222;color:#fff;padding:10px 16px;border-radius:6px;z-index:99999';
+        fb.textContent = String(msg == null ? '' : msg);
+        document.body.appendChild(fb);
+        setTimeout(function() { fb.remove(); }, 3000);
+        return;
+      }
+      var t = document.createElement('div');
+      t.className = 'toast toast-' + escapeHtml(type);
+      var iconSpan = document.createElement('span');
+      iconSpan.className = 'toast-icon';
+      iconSpan.style.color = colors[type] || colors.info;
+      iconSpan.textContent = icons[type] || '◉';
+      var msgSpan = document.createElement('span');
+      msgSpan.textContent = String(msg == null ? '' : msg);
+      t.appendChild(iconSpan); t.appendChild(msgSpan);
+      container.appendChild(t);
+      setTimeout(function() {
+        t.style.transition = 'opacity .3s'; t.style.opacity = '0';
+        setTimeout(function() { t.remove(); }, 300);
+      }, 3000);
+    };
+    console.log('[VSP-SYNC F3] showToast hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F4 — Findings cache mirror
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixFindingsCache() {
+  whenReady(function() { return typeof window.loadFindings === 'function'; }, function() {
+    var _orig = window.loadFindings;
+    window.loadFindings = async function() {
+      var ret = await _orig.apply(this, arguments);
+      if (Array.isArray(window._findingsData)) window._findingsCache = window._findingsData;
+      return ret;
+    };
+    console.log('[VSP-SYNC F4] cache mirror enabled');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F5 — Policy eval hardened
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixPolicyEvalXSS() {
+  whenReady(function() {
+    return typeof window.runEval === 'function' && document.getElementById('eval-result');
+  }, function() {
+    var _orig = window.runEval;
+    window.runEval = async function() {
+      var el = document.getElementById('eval-result');
+      if (!el) return _orig.apply(this, arguments);
+      el.textContent = '⏳ Evaluating…';
+      try {
+        if (window.TOKEN && typeof window.api === 'function') {
+          var r = await window.api('POST', '/policy/evaluate', {repo:'current'});
+          var color = r.decision === 'PASS' ? 'var(--green)' : r.decision === 'WARN' ? 'var(--amber)' : 'var(--red)';
+          el.innerHTML = '';
+          var sp = document.createElement('span');
+          sp.style.cssText = 'color:' + color + ';font-size:16px;font-weight:700';
+          sp.textContent = r.decision || '—';
+          el.appendChild(sp);
+          el.appendChild(document.createTextNode(' · score: '));
+          var sb = document.createElement('b'); sb.textContent = String(r.score == null ? '—' : r.score); el.appendChild(sb);
+          el.appendChild(document.createTextNode(' · posture: '));
+          var pb = document.createElement('b'); pb.textContent = String(r.posture == null ? '—' : r.posture); el.appendChild(pb);
+          if (r.reason) {
+            el.appendChild(document.createTextNode(' · '));
+            var rs = document.createElement('span'); rs.style.color = 'var(--t3)'; rs.textContent = String(r.reason); el.appendChild(rs);
+          }
+        } else {
+          return _orig.apply(this, arguments);
+        }
+      } catch (e) {
+        el.innerHTML = '';
+        var fs = document.createElement('span'); fs.style.color = 'var(--red)';
+        fs.textContent = 'FAIL · ' + (e && e.message ? e.message : 'evaluation error');
+        el.appendChild(fs);
+      }
+    };
+    console.log('[VSP-SYNC F5] runEval hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F6 threat_hunt
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenThreatHunt() {
+  if (!document.getElementById('results-wrap')) return;
+  whenReady(function() { return typeof window.renderResults === 'function' || window._results !== undefined; }, function() {
+    if (typeof window.renderResults !== 'function') return;
+    window.renderResults = function(q) {
+      var results = window._results || [];
+      var wrap = document.getElementById('results-wrap');
+      if (!wrap) return;
+      if (!results.length) {
+        wrap.textContent = '🔍 No events found matching your query';
+        var b = document.getElementById('results-badge'); if (b) b.textContent = '';
+        return;
+      }
+      var badge = document.getElementById('results-badge');
+      if (badge) badge.textContent = '— ' + results.length + ' events';
+      var scrollWrap = document.createElement('div');
+      scrollWrap.style.overflowX = 'auto';
+      var table = document.createElement('table');
+      table.className = 'results-table';
+      var thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Time</th><th>Sev</th><th>Host</th><th>Process</th><th>Message</th><th>IP</th></tr>';
+      table.appendChild(thead);
+      var tbody = document.createElement('tbody');
+      results.forEach(function(e, i) {
+        var tr = document.createElement('tr');
+        tr.addEventListener('click', function() { window.openEvent && window.openEvent(i); });
+        function td(cls, text) { var c = document.createElement('td'); if (cls) c.className = cls; c.textContent = String(text == null ? '—' : text); return c; }
+        tr.appendChild(td('ts', e.ts));
+        var sevTd = document.createElement('td');
+        var sevSpan = document.createElement('span');
+        sevSpan.className = 'pill ' + (window.sevClass ? window.sevClass(e.severity) : 'pill-gray');
+        sevSpan.textContent = e.severity || 'INFO';
+        sevTd.appendChild(sevSpan); tr.appendChild(sevTd);
+        tr.appendChild(td('host', e.host));
+        tr.appendChild(td('proc', e.process));
+        var msgTd = document.createElement('td'); msgTd.className = 'msg'; msgTd.textContent = String(e.message || '—'); tr.appendChild(msgTd);
+        tr.appendChild(td('ts', e.source_ip));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody); scrollWrap.appendChild(table);
+      wrap.innerHTML = ''; wrap.appendChild(scrollWrap);
+    };
+    console.log('[VSP-SYNC F6] threat_hunt hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F7 correlation
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenCorrelation() {
+  if (!document.getElementById('incidents-list') && !document.getElementById('rules-list')) return;
+
+  whenReady(function() { return typeof window.renderIncidents === 'function'; }, function() {
+    window.renderIncidents = function() {
+      var sf = (document.getElementById('inc-filter')||{}).value || '';
+      var ssf = (document.getElementById('inc-status-filter')||{}).value || '';
+      var INCIDENTS = window.INCIDENTS || [];
+      var list = INCIDENTS.filter(function(i) {
+        if (sf && (i.severity||'').toUpperCase() !== sf) return false;
+        if (ssf && (i.status||'open') !== ssf) return false;
+        return true;
+      });
+      var listEl = document.getElementById('incidents-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      list.forEach(function(inc) {
+        var sc = window.sevClass ? window.sevClass((inc.severity||'').toUpperCase()) : '';
+        var row = document.createElement('div');
+        row.className = 'incident ' + sc;
+        row.addEventListener('click', function() { window.openIncidentDetail && window.openIncidentDetail(inc.id); });
+        var hdr = document.createElement('div'); hdr.className = 'inc-hdr';
+        var idSpan = document.createElement('span'); idSpan.className = 'inc-id'; idSpan.textContent = inc.id || 'INC'; hdr.appendChild(idSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge((inc.severity||'').toUpperCase(), true); hdr.appendChild(sw); }
+        if (window.statusBadge) { var stw = document.createElement('span'); stw.innerHTML = window.statusBadge(inc.status || 'open'); hdr.appendChild(stw); }
+        var titleSpan = document.createElement('span'); titleSpan.className = 'inc-title'; titleSpan.textContent = inc.title || inc.Title || '—'; hdr.appendChild(titleSpan);
+        var timeSpan = document.createElement('span'); timeSpan.className = 'inc-time'; timeSpan.textContent = window.timeAgo ? window.timeAgo(inc.created_at || inc.CreatedAt) : ''; hdr.appendChild(timeSpan);
+        row.appendChild(hdr);
+        var desc = document.createElement('div'); desc.className = 'inc-desc'; desc.textContent = inc.description || inc.desc || inc.rule_name || ''; row.appendChild(desc);
+        var tags = document.createElement('div'); tags.className = 'inc-tags';
+        (inc.source_refs || []).forEach(function(s) {
+          if (typeof s !== 'string' && typeof s !== 'number') return;
+          var pill = document.createElement('span'); pill.className = 'pill pill-cyan'; pill.textContent = String(s); tags.appendChild(pill);
+        });
+        row.appendChild(tags);
+        listEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F7a] correlation incidents hardened');
+  });
+
+  whenReady(function() { return typeof window.renderRules === 'function'; }, function() {
+    window.renderRules = function() {
+      var listEl = document.getElementById('rules-list');
+      if (!listEl) return;
+      var RULES = window.RULES || [];
+      listEl.innerHTML = '';
+      RULES.forEach(function(r) {
+        var row = document.createElement('div'); row.className = 'rule-item';
+        row.addEventListener('click', function() { window.showRuleDetail && window.showRuleDetail(r.id); });
+        var hdr = document.createElement('div'); hdr.className = 'rule-hdr';
+        var btn = document.createElement('button'); btn.className = 'toggle ' + (r.enabled ? 'on' : 'off');
+        btn.addEventListener('click', function(ev) { ev.stopPropagation(); window.toggleRule && window.toggleRule(r.id); });
+        hdr.appendChild(btn);
+        var nameSpan = document.createElement('span'); nameSpan.className = 'rule-name'; nameSpan.textContent = r.name || ''; hdr.appendChild(nameSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge(r.severity); hdr.appendChild(sw); }
+        row.appendChild(hdr);
+        var desc = document.createElement('div'); desc.className = 'rule-desc'; desc.textContent = r.cond || ''; row.appendChild(desc);
+        var meta = document.createElement('div'); meta.className = 'rule-meta';
+        var win = document.createElement('span'); win.className = 'pill pill-purple'; win.textContent = (r.window_min || r.window || 5) + 'm'; meta.appendChild(win);
+        (r.sources || []).forEach(function(s) {
+          if (typeof s !== 'string' && typeof s !== 'number') return;
+          var p = document.createElement('span'); p.className = 'pill pill-cyan'; p.textContent = String(s); meta.appendChild(p);
+        });
+        var hits = document.createElement('span'); hits.className = 'pill pill-gray'; hits.textContent = 'hits: ' + (r.hits || 0); meta.appendChild(hits);
+        row.appendChild(meta);
+        listEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F7b] correlation rules hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F8 SOAR
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenSOAR() {
+  if (!document.getElementById('hmod-log')) return;
+  whenReady(function() { return typeof window.openRunDetail === 'function'; }, function() {
+    var _orig = window.openRunDetail;
+    window.openRunDetail = function(id) {
+      _orig.apply(this, arguments);
+      var RUN_HISTORY = window.RUN_HISTORY || [];
+      var run = RUN_HISTORY.find(function(r) { return r.id === id; });
+      if (!run) return;
+      var logEl = document.getElementById('hmod-log');
+      if (!logEl) return;
+      logEl.innerHTML = '';
+      if (!run.log || !run.log.length) {
+        var empty = document.createElement('span'); empty.style.cssText = 'color:var(--t3);font-size:11px';
+        empty.textContent = 'No log available'; logEl.appendChild(empty); return;
+      }
+      run.log.forEach(function(l) {
+        var row = document.createElement('div'); row.className = 'll';
+        var ts = document.createElement('span'); ts.className = 'll-ts'; ts.textContent = String(l.ts || '');
+        var lv = document.createElement('span'); lv.className = 'll-lv ll-' + escapeHtml(String(l.lv || 'INFO')); lv.textContent = String(l.lv || 'INFO');
+        var msg = document.createElement('span'); msg.className = 'll-msg'; msg.textContent = String(l.msg || '');
+        row.appendChild(ts); row.appendChild(lv); row.appendChild(msg);
+        logEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F8] soar log hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F9 log_pipeline
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenLogPipeline() {
+  if (!document.getElementById('live-stream')) return;
+  whenReady(function() { return typeof window.renderStream === 'function'; }, function() {
+    window.renderStream = function() {
+      var STREAM_ALL = window.STREAM_ALL || [];
+      var _filterActive = window._filterActive || {};
+      var list = STREAM_ALL.filter(function(e) {
+        if (_filterActive.sev && e.sev !== _filterActive.sev) return false;
+        if (_filterActive.src && e.src !== _filterActive.src) return false;
+        if (_filterActive.kw && !e.msg.toLowerCase().includes(_filterActive.kw.toLowerCase())) return false;
+        return true;
+      });
+      var el = document.getElementById('live-stream');
+      if (!el) return;
+      el.innerHTML = '';
+      list.slice(-200).forEach(function(e) {
+        var row = document.createElement('div'); row.className = 'll';
+        row.addEventListener('click', function() { alert(String(e.raw || e.msg || '')); });
+        var ts = document.createElement('span'); ts.className = 'll-ts'; ts.textContent = String(e.ts || '');
+        var src = document.createElement('span'); src.className = 'll-src'; src.textContent = String(e.src || '');
+        var sev = document.createElement('span'); sev.className = 'll-sev ll-' + escapeHtml(String(e.sev || 'INFO')); sev.textContent = String(e.sev || 'INFO');
+        var msg = document.createElement('span'); msg.className = 'll-msg'; msg.textContent = String(e.msg || '');
+        row.appendChild(ts); row.appendChild(src); row.appendChild(sev); row.appendChild(msg);
+        el.appendChild(row);
+      });
+      el.scrollTop = el.scrollHeight;
+      var t = document.getElementById('stream-total'); if (t) t.textContent = window._streamTotal || 0;
+      var s = document.getElementById('stream-shown'); if (s) s.textContent = list.length;
+      var er = document.getElementById('stream-errors'); if (er) er.textContent = window._streamErrors || 0;
+    };
+    console.log('[VSP-SYNC F9] log_pipeline hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F10 admin alerts
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenAdmin() {
+  if (!document.getElementById('overview-alerts') && !document.getElementById('alert-list')) return;
+  whenReady(function() { return typeof window.renderAlert === 'function'; }, function() {
+    window.renderAlert = function(a) {
+      var colors = {CRITICAL:'var(--red)',HIGH:'var(--amber)',MEDIUM:'var(--cyan)',LOW:'var(--t3)',INFO:'var(--green)',test:'var(--purple)'};
+      var col = colors[a.severity] || 'var(--t3)';
+      var wrap = document.createElement('div'); wrap.className = 'alert-item';
+      var bar = document.createElement('div'); bar.className = 'alert-sev'; bar.style.background = col; wrap.appendChild(bar);
+      var body = document.createElement('div'); body.style.flex = '1';
+      var title = document.createElement('div'); title.className = 'alert-title'; title.textContent = String(a.title || '');
+      var msg = document.createElement('div'); msg.className = 'alert-msg'; msg.textContent = String(a.message || '');
+      var time = document.createElement('div'); time.className = 'alert-time';
+      var ts = a.sent_at ? new Date(a.sent_at).toLocaleString() : '';
+      time.textContent = ts + ' · ' + String(a.type || '') + ' · ' + String(a.channel || '');
+      body.appendChild(title); body.appendChild(msg); body.appendChild(time); wrap.appendChild(body);
+      var sev = document.createElement('span');
+      sev.style.cssText = 'font-size:10px;font-weight:600;color:'+col+';padding:3px 8px;background:rgba(255,255,255,.05);border-radius:4px';
+      sev.textContent = String(a.severity || ''); wrap.appendChild(sev);
+      return wrap.outerHTML;
+    };
+    console.log('[VSP-SYNC F10] alerts hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F11 users
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenUsers() {
+  if (!document.getElementById('user-tbody') && !document.getElementById('audit-list')) return;
+
+  whenReady(function() { return typeof window.renderUsers === 'function'; }, function() {
+    window.renderUsers = function() {
+      var USERS = window.USERS || [];
+      var sf = (document.getElementById('user-filter')||{}).value || '';
+      var rf = (document.getElementById('role-filter')||{}).value || '';
+      var list = USERS.filter(function(u) {
+        if (sf && u.status !== sf) return false;
+        if (rf && u.role !== rf) return false;
+        return true;
+      });
+      var sub = document.getElementById('users-sub'); if (sub) sub.textContent = list.length + ' users';
+      var tbody = document.getElementById('user-tbody'); if (!tbody) return;
+      tbody.innerHTML = '';
+      list.forEach(function(u, idx) {
+        var av = (u.name || '').split(' ').map(function(w) { return w[0] || ''; }).join('').slice(0,2).toUpperCase();
+        var avColor = window.avatarColor ? window.avatarColor(u.name) : 'var(--cyan)';
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td');
+        var box = document.createElement('div'); box.style.cssText = 'display:flex;align-items:center;gap:10px';
+        var avDiv = document.createElement('div'); avDiv.className = 'avatar';
+        avDiv.style.cssText = 'background:' + avColor + '22;color:' + avColor;
+        avDiv.textContent = av;
+        var info = document.createElement('div');
+        var nameDiv = document.createElement('div'); nameDiv.style.fontWeight = '500'; nameDiv.textContent = String(u.name || '');
+        var emailDiv = document.createElement('div');
+        emailDiv.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)';
+        emailDiv.textContent = String(u.email || '');
+        info.appendChild(nameDiv); info.appendChild(emailDiv);
+        box.appendChild(avDiv); box.appendChild(info); c1.appendChild(box); tr.appendChild(c1);
+        var c2 = document.createElement('td'); if (window.roleBadge) c2.innerHTML = window.roleBadge(u.role); tr.appendChild(c2);
+        var c3 = document.createElement('td');
+        c3.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)';
+        c3.textContent = String(u.last_login || ''); tr.appendChild(c3);
+        var c4 = document.createElement('td'); if (window.statusBadge) c4.innerHTML = window.statusBadge(u.status); tr.appendChild(c4);
+        var c5 = document.createElement('td');
+        var mfaPill = document.createElement('span'); mfaPill.className = u.mfa ? 'pill pill-green' : 'pill pill-amber';
+        mfaPill.textContent = u.mfa ? 'MFA on' : 'no MFA'; c5.appendChild(mfaPill); tr.appendChild(c5);
+        var c6 = document.createElement('td');
+        var actions = document.createElement('div'); actions.style.cssText = 'display:flex;gap:5px';
+        var editBtn = document.createElement('button'); editBtn.className = 'btn btn-sm'; editBtn.innerHTML = '&#9998;';
+        editBtn.addEventListener('click', function() { window.editUser && window.editUser(idx); });
+        actions.appendChild(editBtn);
+        if (u.email !== 'admin@vsp.local') {
+          var delBtn = document.createElement('button'); delBtn.className = 'btn btn-danger btn-sm'; delBtn.innerHTML = '&#10005;';
+          delBtn.addEventListener('click', function() { window.deleteUser && window.deleteUser(idx); });
+          actions.appendChild(delBtn);
+        }
+        c6.appendChild(actions); tr.appendChild(c6);
+        tbody.appendChild(tr);
+      });
+    };
+    console.log('[VSP-SYNC F11a] users hardened');
+  });
+
+  whenReady(function() { return typeof window.renderAudit === 'function'; }, function() {
+    window.renderAudit = function() {
+      var AUDIT = window.AUDIT || [];
+      var af = (document.getElementById('audit-filter')||{}).value || '';
+      var list = AUDIT.filter(function(a) { return !af || a.action === af; });
+      var dotColor = {info:'var(--blue)',warn:'var(--amber)',error:'var(--red)'};
+      var listEl = document.getElementById('audit-list'); if (!listEl) return;
+      listEl.innerHTML = '';
+      list.forEach(function(a) {
+        var row = document.createElement('div'); row.className = 'audit-row';
+        var dot = document.createElement('div'); dot.className = 'audit-dot';
+        dot.style.background = dotColor[a.level] || 'var(--t3)';
+        var body = document.createElement('div'); body.style.flex = '1';
+        var detail = document.createElement('div'); detail.style.cssText = 'font-weight:500;margin-bottom:2px'; detail.textContent = String(a.detail || '');
+        var sub = document.createElement('div'); sub.style.cssText = 'color:var(--t3);font-size:10px;font-family:var(--font-mono)';
+        sub.textContent = String(a.user || '') + ' · ' + String(a.action || '');
+        body.appendChild(detail); body.appendChild(sub);
+        var time = document.createElement('div'); time.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono);flex-shrink:0';
+        time.textContent = String(a.ts || '');
+        row.appendChild(dot); row.appendChild(body); row.appendChild(time);
+        listEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F11b] audit hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F18 — UEBA
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenUEBA() {
+  if (!document.getElementById('anom-list')) return;
+  whenReady(function() { return typeof window.renderAnomalies === 'function'; }, function() {
+    window.renderAnomalies = function() {
+      var ANOMALIES = window.ANOMALIES || [];
+      var list = ANOMALIES.slice();
+      var sf = (document.getElementById('anom-filter')||{}).value || '';
+      if (sf) list = list.filter(function(a) { return (a.severity||'').toUpperCase() === sf; });
+      var maxS = list.length ? Math.max.apply(null, list.map(function(a){return a.score||0;})) : 0;
+      var kEl = document.getElementById('k-risk'); if (kEl) kEl.textContent = maxS || '—';
+      var listEl = document.getElementById('anom-list'); if (!listEl) return;
+      if (!list.length) {
+        listEl.innerHTML = '';
+        var empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;padding:16px;color:var(--green);font-size:12px';
+        empty.textContent = '✓ No anomalies detected';
+        listEl.appendChild(empty); return;
+      }
+      listEl.innerHTML = '';
+      list.forEach(function(a) {
+        var sc = window.sevClass ? window.sevClass((a.severity||'').toUpperCase()) : '';
+        var row = document.createElement('div'); row.className = 'anomaly ' + sc;
+        row.addEventListener('click', function() { if (window.openAnomDetailObj) window.openAnomDetailObj(a); });
+        var hdr = document.createElement('div'); hdr.className = 'a-hdr';
+        var typeSpan = document.createElement('span'); typeSpan.className = 'a-type';
+        typeSpan.textContent = String((a.type||'')).replace(/_/g, ' ');
+        hdr.appendChild(typeSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge(a.severity); hdr.appendChild(sw); }
+        var titleSpan = document.createElement('span'); titleSpan.className = 'a-title'; titleSpan.textContent = String(a.message || 'Anomaly'); hdr.appendChild(titleSpan);
+        var scoreSpan = document.createElement('span'); scoreSpan.className = 'a-score'; scoreSpan.textContent = (a.score || 0) + '/100'; hdr.appendChild(scoreSpan);
+        row.appendChild(hdr);
+        if (a.entity) { var entDiv = document.createElement('div'); entDiv.className = 'a-entity'; entDiv.textContent = 'entity: ' + String(a.entity); row.appendChild(entDiv); }
+        var barWrap = document.createElement('div'); barWrap.className = 'a-bar-wrap';
+        var bar = document.createElement('div'); bar.className = 'a-bar';
+        var sevC = window.sevColor ? window.sevColor(a.severity) : 'var(--cyan)';
+        bar.style.cssText = 'width:' + (a.score||0) + '%;background:' + sevC;
+        barWrap.appendChild(bar); row.appendChild(barWrap);
+        listEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F18] ueba hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F19 + F20 threat_intel
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenThreatIntel() {
+  if (!document.getElementById('ioc-list') && !document.getElementById('cve-tbody')) return;
+
+  whenReady(function() { return typeof window.renderIOCs === 'function'; }, function() {
+    window.renderIOCs = function() {
+      var IOCS = window.IOCS || [];
+      var tf = (document.getElementById('ioc-type-filter')||{}).value || '';
+      var q  = ((document.getElementById('ioc-search')||{}).value || '').toLowerCase();
+      var list = IOCS.filter(function(i) {
+        if (tf && i.type !== tf) return false;
+        if (q && !((i.val||'').toLowerCase().includes(q) || (i.context||'').toLowerCase().includes(q))) return false;
+        return true;
+      });
+      var listEl = document.getElementById('ioc-list'); if (!listEl) return;
+      listEl.innerHTML = '';
+      list.forEach(function(i) {
+        var cls = i.matched ? 'matched' : (window.sevClass ? window.sevClass(i.severity) : '');
+        var row = document.createElement('div'); row.className = 'ioc ' + cls;
+        row.addEventListener('click', function() { if (window.openIOCDetail) window.openIOCDetail(i.id); });
+        var hdr = document.createElement('div'); hdr.className = 'ioc-hdr';
+        var typeSpan = document.createElement('span'); typeSpan.className = 'ioc-type'; typeSpan.textContent = String(i.type || ''); hdr.appendChild(typeSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge(i.severity); hdr.appendChild(sw); }
+        if (i.matched) { var mp = document.createElement('span'); mp.className = 'pill pill-green'; mp.textContent = '✓ matched'; hdr.appendChild(mp); }
+        var valSpan = document.createElement('span'); valSpan.className = 'ioc-val'; valSpan.textContent = String(i.val || ''); hdr.appendChild(valSpan);
+        row.appendChild(hdr);
+        var feedDiv = document.createElement('div'); feedDiv.className = 'ioc-feed'; feedDiv.textContent = 'feed: ' + String(i.feed || ''); row.appendChild(feedDiv);
+        var tags = document.createElement('div'); tags.className = 'ioc-tags';
+        (i.mitre || []).forEach(function(m) {
+          if (typeof m !== 'string' && typeof m !== 'number') return;
+          var pill = document.createElement('span'); pill.className = 'pill pill-purple'; pill.textContent = String(m); tags.appendChild(pill);
+        });
+        row.appendChild(tags); listEl.appendChild(row);
+      });
+      var kEl = document.getElementById('k-matches');
+      if (kEl) kEl.textContent = IOCS.filter(function(i) { return i.matched; }).length;
+    };
+    console.log('[VSP-SYNC F19] threat_intel IOCs hardened');
+  });
+
+  whenReady(function() { return typeof window.renderCVEs === 'function'; }, function() {
+    window.renderCVEs = function() {
+      var CVES = window.CVES || [];
+      var tbody = document.getElementById('cve-tbody'); if (!tbody) return;
+      tbody.innerHTML = '';
+      CVES.forEach(function(c) {
+        var tr = document.createElement('tr'); tr.className = 'cve-row';
+        tr.addEventListener('click', function() { if (window.openCVEDetail) window.openCVEDetail(c.id); });
+        var cvssColor = c.cvss >= 9 ? 'var(--red)' : c.cvss >= 7 ? 'var(--amber)' : 'var(--blue)';
+        var td1 = document.createElement('td'); td1.style.cssText = 'padding:8px 10px;font-family:var(--font-mono);font-size:10px;color:var(--cyan)'; td1.textContent = String(c.id || ''); tr.appendChild(td1);
+        var td2 = document.createElement('td'); td2.style.cssText = 'padding:8px 10px;font-size:11px';
+        td2.appendChild(document.createTextNode(String(c.desc || ''))); td2.appendChild(document.createElement('br'));
+        var compSpan = document.createElement('span'); compSpan.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)'; compSpan.textContent = String(c.component || ''); td2.appendChild(compSpan);
+        tr.appendChild(td2);
+        var td3 = document.createElement('td'); td3.style.cssText = 'padding:8px 10px';
+        var cvssSpan = document.createElement('span'); cvssSpan.style.cssText = 'font-family:var(--font-mono);font-weight:700;font-size:12px;color:' + cvssColor; cvssSpan.textContent = String(c.cvss || ''); td3.appendChild(cvssSpan);
+        tr.appendChild(td3);
+        var td4 = document.createElement('td'); td4.style.cssText = 'padding:8px 10px;font-family:var(--font-mono);font-size:11px;color:var(--t2)'; td4.textContent = String(c.epss || ''); tr.appendChild(td4);
+        var td5 = document.createElement('td'); td5.style.cssText = 'padding:8px 10px';
+        var kevPill = document.createElement('span'); kevPill.className = c.kev ? 'pill pill-red' : 'pill pill-gray'; kevPill.textContent = c.kev ? 'KEV' : 'No'; td5.appendChild(kevPill);
+        tr.appendChild(td5);
+        var td6 = document.createElement('td'); td6.style.cssText = 'padding:8px 10px';
+        String(c.ttp || '').split(',').forEach(function(t) {
+          var tt = t.trim(); if (!tt) return;
+          var p = document.createElement('span'); p.className = 'pill pill-purple'; p.style.marginRight = '2px'; p.textContent = tt; td6.appendChild(p);
+        });
+        tr.appendChild(td6); tbody.appendChild(tr);
+      });
+    };
+    console.log('[VSP-SYNC F20] threat_intel CVEs hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F21 assets
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenAssets() {
+  if (!document.getElementById('asset-tbody') && !document.getElementById('findings-list')) return;
+  whenReady(function() { return typeof window.renderFindings === 'function'; }, function() {
+    window.renderFindings = function() {
+      var ALL_FINDINGS = window.ALL_FINDINGS || [];
+      var _activeAsset = window._activeAsset || null;
+      var sf = (document.getElementById('sev-filter')||{}).value || '';
+      var stf = (document.getElementById('status-filter')||{}).value || '';
+      var q = ((document.getElementById('search-box')||{}).value || '').toLowerCase();
+      var src = _activeAsset ? ALL_FINDINGS.filter(function(f) { return f.asset_id === _activeAsset.id; }) : ALL_FINDINGS;
+      var list = src.filter(function(f) {
+        if (sf && (f.severity||'').toUpperCase() !== sf) return false;
+        if (stf && (f.status||'open') !== stf) return false;
+        if (q && !((f.title||'').toLowerCase().includes(q) || (f.asset||'').toLowerCase().includes(q))) return false;
+        return true;
+      });
+      var titleEl = document.getElementById('findings-title');
+      if (titleEl) titleEl.textContent = _activeAsset ? (_activeAsset.name + ' findings') : 'All findings';
+      var subEl = document.getElementById('findings-sub'); if (subEl) subEl.textContent = list.length + ' findings';
+      var listEl = document.getElementById('findings-list'); if (!listEl) return;
+      listEl.innerHTML = '';
+      if (!list.length) {
+        var empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;padding:16px;color:var(--t3);font-size:11px';
+        empty.textContent = 'No findings match filter'; listEl.appendChild(empty); return;
+      }
+      list.forEach(function(f) {
+        var sc = window.sevClass ? window.sevClass((f.severity||'').toUpperCase()) : '';
+        var row = document.createElement('div'); row.className = 'finding ' + sc;
+        row.addEventListener('click', function() { if (window.openFindingModal) window.openFindingModal(f.id); });
+        var hdr = document.createElement('div'); hdr.className = 'f-hdr';
+        var idSpan = document.createElement('span'); idSpan.className = 'f-id'; idSpan.textContent = String(f.id || '').slice(0, 8); hdr.appendChild(idSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge(f.severity); hdr.appendChild(sw); }
+        if (f.status === 'resolved') { var p = document.createElement('span'); p.className = 'pill pill-green'; p.textContent = 'resolved'; hdr.appendChild(p); }
+        var titleSpan = document.createElement('span'); titleSpan.className = 'f-title'; titleSpan.textContent = String(f.title || ''); hdr.appendChild(titleSpan);
+        var assetSpan = document.createElement('span'); assetSpan.className = 'f-ts'; assetSpan.textContent = String(f.asset || ''); hdr.appendChild(assetSpan);
+        row.appendChild(hdr);
+        var fileDiv = document.createElement('div'); fileDiv.className = 'f-file';
+        fileDiv.textContent = String(f.tool || '') + ' · ' + String(f.file || '') + ':' + String(f.line || '');
+        row.appendChild(fileDiv);
+        var tags = document.createElement('div'); tags.className = 'f-tags';
+        var rulePill = document.createElement('span'); rulePill.className = 'pill pill-gray'; rulePill.textContent = String(f.rule || ''); tags.appendChild(rulePill);
+        if (f.cwe) { var cp = document.createElement('span'); cp.className = 'pill pill-gray'; cp.textContent = String(f.cwe); tags.appendChild(cp); }
+        if (f.cvss) { var cp2 = document.createElement('span'); cp2.className = 'pill pill-blue'; cp2.textContent = 'CVSS ' + String(f.cvss); tags.appendChild(cp2); }
+        row.appendChild(tags); listEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F21] assets hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F22 ai_analyst incident sidebar
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenAIAnalyst() {
+  if (!document.getElementById('inc-list-sidebar')) return;
+  whenReady(function() {
+    var el = document.getElementById('inc-list-sidebar');
+    return el && el.children.length > 0;
+  }, function() {
+    var listEl = document.getElementById('inc-list-sidebar'); if (!listEl) return;
+    var sevColor = { CRITICAL:'var(--red)', HIGH:'var(--amber)', MEDIUM:'var(--blue)', LOW:'var(--green)' };
+    var _ctxData = window._ctxData || {};
+    var openIncs = (_ctxData.incidents || []).filter(function(i){ return i.status === 'open'; });
+    if (!openIncs.length) return;
+    listEl.innerHTML = '';
+    openIncs.slice(0, 5).forEach(function(inc) {
+      var color = sevColor[inc.severity] || 'var(--t2)';
+      var item = document.createElement('div'); item.className = 'inc-item';
+      item.addEventListener('click', function() { if (window.qa) window.qa('Phân tích incident: ' + String(inc.title || '')); });
+      var titleDiv = document.createElement('div'); titleDiv.className = 'inc-title';
+      titleDiv.title = String(inc.title || ''); titleDiv.textContent = String(inc.title || '');
+      item.appendChild(titleDiv);
+      var meta = document.createElement('div'); meta.className = 'inc-meta'; meta.style.color = color;
+      meta.textContent = String(inc.severity || '') + ' · ' + String(inc.created_at || '').slice(0, 10);
+      item.appendChild(meta); listEl.appendChild(item);
+    });
+    console.log('[VSP-SYNC F22] ai_analyst sidebar hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F23-F25 — vuln_mgmt.html (NEW IN V4)
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenVulnMgmt() {
+  if (!document.getElementById('cve-body') && !document.getElementById('tool-body') && !document.getElementById('sla-body')) return;
+
+  // F23: CVE table
+  whenReady(function() { return typeof window.renderCVEs === 'function' && document.getElementById('cve-body'); }, function() {
+    window.renderCVEs = function(cves) {
+      var _cveData = window._cveData || cves || [];
+      window._cveData = _cveData;
+      var sf = (document.getElementById('cve-sev-filter')||{}).value || '';
+      var q = ((document.getElementById('cve-search')||{}).value || '').toLowerCase();
+      var list = _cveData.filter(function(c) {
+        if (sf && (c.severity||'').toUpperCase() !== sf) return false;
+        if (q && !(c.cve||'').toLowerCase().includes(q) && !(c.tools||'').toLowerCase().includes(q)) return false;
+        return true;
+      });
+      var sub = document.getElementById('cve-sub'); if (sub) sub.textContent = list.length + ' CVEs';
+      var body = document.getElementById('cve-body'); if (!body) return;
+      body.innerHTML = '';
+      if (!list.length) {
+        var tr = document.createElement('tr');
+        var td = document.createElement('td'); td.colSpan = 4;
+        var es = document.createElement('div'); es.className = 'empty-state';
+        var emo = document.createElement('div'); emo.className = 'emo'; emo.textContent = '🔍'; es.appendChild(emo);
+        var p = document.createElement('p'); p.textContent = 'No CVEs match the filter'; es.appendChild(p);
+        td.appendChild(es); tr.appendChild(td); body.appendChild(tr);
+        return;
+      }
+      list.forEach(function(c) {
+        var origIdx = _cveData.indexOf(c);
+        var tr = document.createElement('tr');
+        tr.addEventListener('click', function() { window.openCVEDetail && window.openCVEDetail(origIdx); });
+        // CVE col
+        var td1 = document.createElement('td');
+        td1.style.cssText = 'font-family:var(--font-mono);font-size:10px';
+        td1.textContent = String(c.cve || '');
+        if (c.fixable) {
+          var fb = document.createElement('span'); fb.className = 'fixable-badge'; fb.textContent = 'fix ✓';
+          td1.appendChild(fb);
+        }
+        tr.appendChild(td1);
+        // Severity
+        var td2 = document.createElement('td');
+        if (window.sevPill) td2.innerHTML = window.sevPill(c.severity);
+        else { var sp = document.createElement('span'); sp.className = 'pill'; sp.textContent = String(c.severity||''); td2.appendChild(sp); }
+        tr.appendChild(td2);
+        // Count
+        var td3 = document.createElement('td');
+        td3.style.cssText = 'font-family:var(--font-mono);text-align:right';
+        td3.textContent = String(c.count || 0);
+        tr.appendChild(td3);
+        // Tools
+        var td4 = document.createElement('td');
+        td4.style.cssText = 'font-size:10px;color:var(--t3);max-width:140px;overflow:hidden;text-overflow:ellipsis';
+        td4.title = String(c.tools || '');
+        td4.textContent = String(c.tools || '—');
+        tr.appendChild(td4);
+        body.appendChild(tr);
+      });
+    };
+    console.log('[VSP-SYNC F23] vuln_mgmt CVE table hardened');
+  });
+
+  // F24: Tools breakdown
+  whenReady(function() { return typeof window.renderTools === 'function' && document.getElementById('tool-body'); }, function() {
+    window.renderTools = function(tools) {
+      window._toolData = tools;
+      var sub = document.getElementById('tool-sub'); if (sub) sub.textContent = tools.length + ' scanners';
+      var body = document.getElementById('tool-body'); if (!body) return;
+      if (!tools.length) {
+        body.innerHTML = '';
+        var es = document.createElement('div'); es.className = 'empty-state';
+        var emo = document.createElement('div'); emo.className = 'emo'; emo.textContent = '🔍'; es.appendChild(emo);
+        var p = document.createElement('p'); p.textContent = 'No tool data'; es.appendChild(p);
+        body.appendChild(es); return;
+      }
+      var maxTotal = Math.max.apply(null, tools.map(function(t){ return t.total || 0; })) || 1;
+      body.innerHTML = '';
+      tools.forEach(function(t) {
+        var row = document.createElement('div'); row.className = 'tool-row';
+        var name = document.createElement('span'); name.className = 'tool-name'; name.textContent = String(t.tool || ''); row.appendChild(name);
+        var barWrap = document.createElement('div'); barWrap.style.flex = '1';
+        var sevBar = document.createElement('div'); sevBar.className = 'sev-bar';
+        function seg(val, color, label) {
+          if (!val) return null;
+          var s = document.createElement('div'); s.className = 'sev-seg';
+          s.style.cssText = 'flex:' + val + ';background:' + color; s.title = label + ': ' + val;
+          return s;
+        }
+        var c = seg(t.critical, '#ef4444', 'Critical'); if (c) sevBar.appendChild(c);
+        var h = seg(t.high,     '#f59e0b', 'High');     if (h) sevBar.appendChild(h);
+        var m = seg(t.medium,   '#3b82f6', 'Medium');   if (m) sevBar.appendChild(m);
+        var l = seg(t.low,      '#22c55e', 'Low');      if (l) sevBar.appendChild(l);
+        barWrap.appendChild(sevBar); row.appendChild(barWrap);
+        var total = document.createElement('span');
+        total.style.cssText = 'font-family:var(--font-mono);font-size:11px;min-width:36px;text-align:right;color:var(--t2)';
+        total.textContent = String(t.total || 0);
+        row.appendChild(total); body.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F24] vuln_mgmt tools hardened');
+  });
+
+  // F25: SLA panel
+  whenReady(function() { return typeof window.renderSLA === 'function' && document.getElementById('sla-body'); }, function() {
+    window.renderSLA = function(slaRows) {
+      var body = document.getElementById('sla-body'); if (!body) return;
+      body.innerHTML = '';
+      slaRows.forEach(function(r) {
+        var color = r.pct >= 90 ? 'var(--green)' : r.pct >= 70 ? 'var(--amber)' : 'var(--red)';
+        var row = document.createElement('div'); row.className = 'sla-row';
+        var label = document.createElement('span');
+        label.style.cssText = 'font-size:11px;width:110px;flex-shrink:0';
+        label.textContent = String(r.label || ''); row.appendChild(label);
+        var bar = document.createElement('div'); bar.className = 'progress-bar';
+        var fill = document.createElement('div'); fill.className = 'progress-fill';
+        fill.style.cssText = 'width:' + (r.pct||0) + '%;background:' + color;
+        bar.appendChild(fill); row.appendChild(bar);
+        var pct = document.createElement('span');
+        pct.style.cssText = 'font-size:11px;font-family:var(--font-mono);color:' + color + ';width:36px;text-align:right';
+        pct.textContent = (r.pct||0) + '%';
+        row.appendChild(pct); body.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F25] vuln_mgmt SLA hardened');
+  });
+})();
+
+console.log('═══════════════════════════════════════════════════════');
+console.log('VSP FE SYNC PATCH v4 loaded ✓ — 19 fixes registered');
+console.log('  Core: F1-F5 (5)');
+console.log('  SIEM: F6-F11 (6)');
+console.log('  Behavioral+TI: F18-F22 (5)');
+console.log('  Vuln Mgmt: F23-F25 (3) NEW IN V4');
+console.log('═══════════════════════════════════════════════════════');
+
+})();

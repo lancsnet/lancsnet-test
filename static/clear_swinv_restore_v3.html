@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Clear SW Inventory Restore</title>
+  <style>
+    body {
+      background:#080c14;
+      color:#dbeafe;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+      padding:24px;
+    }
+    .box {
+      max-width:880px;
+      border:1px solid #263245;
+      border-radius:14px;
+      padding:20px;
+      background:#111827;
+    }
+    a {
+      color:#67e8f9;
+      font-weight:700;
+    }
+    pre {
+      background:#020617;
+      padding:12px;
+      border-radius:10px;
+      overflow:auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>SW Inventory restore/cache cleared</h2>
+    <p id="result">Clearing...</p>
+    <pre id="keys"></pre>
+    <p>
+      <a id="openShell" href="/">Open VSP shell</a>
+    </p>
+  </div>
+
+  <script>
+    (function(){
+      const removed = [];
+
+      function clearStore(store, name) {
+        const keys = [];
+        for (let i = 0; i < store.length; i++) keys.push(store.key(i));
+
+        keys.forEach(k => {
+          if (
+            /swinventory|sw_inventory|selected.*panel|panel.*iframe|last.*panel|active.*panel|cachebust/i.test(k)
+          ) {
+            removed.push(name + ':' + k + '=' + store.getItem(k));
+            store.removeItem(k);
+          }
+        });
+      }
+
+      try { clearStore(localStorage, 'localStorage'); } catch(e) {}
+      try { clearStore(sessionStorage, 'sessionStorage'); } catch(e) {}
+
+      const v = 'clear_swinv_restore_v3_' + Date.now();
+      document.getElementById('result').textContent =
+        'Done. Removed ' + removed.length + ' stored panel/cache keys.';
+      document.getElementById('keys').textContent =
+        removed.length ? removed.join('\n') : 'No matching stored keys found.';
+      document.getElementById('openShell').href = '/?v=' + v;
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+/* CICD_PIPELINE_ENTERPRISE_V17 */
+
+#tab-pipeline.cicd-pipeline-v17-ready > .card,
+#tab-pipeline.cicd-pipeline-v17-ready > .grid3 {
+  display: none !important;
+}
+
+.cicd-pipeline-v17 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, .92fr);
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.cicd-p17-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cicd-p17-panel {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #0b1427, #070d1a);
+  border-radius: 16px;
+  padding: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cicd-p17-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cicd-p17-title {
+  font-weight: 950;
+  color: #e8f0fb;
+}
+
+.cicd-p17-sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.cicd-p17-flow {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cicd-p17-step {
+  position: relative;
+  border: 1px solid rgba(49,70,108,.9);
+  background: #08101f;
+  border-radius: 14px;
+  padding: 12px 9px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cicd-p17-step:before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #60a5fa;
+  box-shadow: 0 0 12px rgba(96,165,250,.8);
+}
+
+.cicd-p17-step.pass:before {
+  background: #22c55e;
+  box-shadow: 0 0 12px rgba(34,197,94,.85);
+}
+
+.cicd-p17-step.block:before {
+  background: #ef4444;
+  box-shadow: 0 0 12px rgba(239,68,68,.85);
+}
+
+.cicd-p17-step-title {
+  padding-left: 16px;
+  font-weight: 950;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cicd-p17-step-sub {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.cicd-p17-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cicd-p17-metric {
+  border: 1px solid rgba(37,49,79,.78);
+  background: #08101f;
+  border-radius: 13px;
+  padding: 10px;
+}
+
+.cicd-p17-label {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 950;
+}
+
+.cicd-p17-value {
+  margin-top: 7px;
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -.04em;
+}
+
+.cicd-p17-mini {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cicd-p17-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cicd-p17-tool {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(37,49,79,.78);
+  background: #08101f;
+  border-radius: 13px;
+  padding: 10px;
+}
+
+.cicd-p17-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(96,165,250,.12);
+  color: #bfdbfe;
+  font-weight: 950;
+}
+
+.cicd-p17-tool-name {
+  font-weight: 950;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cicd-p17-tool-sub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cicd-p17-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cicd-p17-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(37,49,79,.78);
+  background: #08101f;
+  border-radius: 13px;
+  padding: 10px;
+}
+
+.cicd-p17-id {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-weight: 900;
+  font-size: 12px;
+  color: #dbeafe;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cicd-p17-meta {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cicd-p17-policy {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cicd-p17-policy-card {
+  border: 1px solid rgba(37,49,79,.78);
+  background: #08101f;
+  border-radius: 13px;
+  padding: 10px;
+}
+
+.cicd-p17-policy-value {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.cicd-p17-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.cicd-p17-action {
+  border: 1px solid rgba(37,49,79,.78);
+  background: #08101f;
+  border-radius: 13px;
+  padding: 10px;
+}
+
+.cicd-p17-action-title {
+  font-weight: 950;
+}
+
+.cicd-p17-action-sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+@media (max-width: 1500px) {
+  .cicd-pipeline-v17 {
+    grid-template-columns: 1fr;
+  }
+
+  .cicd-p17-flow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .cicd-p17-metrics,
+  .cicd-p17-tool-grid,
+  .cicd-p17-policy {
+    grid-template-columns: 1fr;
+  }
+
+  .cicd-p17-flow {
+    grid-template-columns: 1fr;
+  }
+}

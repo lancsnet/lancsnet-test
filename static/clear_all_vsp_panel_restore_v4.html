@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Clear VSP Panel Restore V4</title>
+<style>
+body{background:#070b14;color:#dbeafe;font-family:ui-monospace,Menlo,Consolas,monospace;padding:24px}
+.box{max-width:900px;background:#111827;border:1px solid #263245;border-radius:14px;padding:20px}
+a{color:#67e8f9;font-weight:700}
+pre{white-space:pre-wrap;background:#020617;padding:12px;border-radius:10px}
+</style>
+</head>
+<body>
+<div class="box">
+<h2>VSP SW Inventory restore cleared</h2>
+<p id="status">Clearing...</p>
+<pre id="removed"></pre>
+<p><a id="open" href="/">Open VSP shell clean</a></p>
+</div>
+<script>
+(function(){
+  var removed=[];
+  function hit(k,v){
+    return /sw[_-]?inventory|swinventory|SWINV_CACHEBUST|selected.*panel|panel.*iframe|last.*panel|active.*panel|cachebust/i.test(String(k||'')) ||
+           /sw[_-]?inventory|swinventory|SWINV_CACHEBUST/i.test(String(v||''));
+  }
+  function clear(store,label){
+    try{
+      var keys=[];
+      for(var i=0;i<store.length;i++) keys.push(store.key(i));
+      keys.forEach(function(k){
+        var v='';
+        try{v=store.getItem(k)||'';}catch(e){}
+        if(hit(k,v)){
+          removed.push(label+': '+k+' = '+v);
+          try{store.removeItem(k);}catch(e){}
+        }
+      });
+    }catch(e){}
+  }
+  clear(localStorage,'localStorage');
+  clear(sessionStorage,'sessionStorage');
+
+  var shell='/?v=clean_swinv_restore_v4_'+Date.now();
+  document.getElementById('status').textContent='Done. Removed '+removed.length+' stale panel restore keys/values.';
+  document.getElementById('removed').textContent=removed.length?removed.join('\n'):'No matching stale restore keys found.';
+  document.getElementById('open').href=shell;
+})();
+</script>
+</body>
+</html>

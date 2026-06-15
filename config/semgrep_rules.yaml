@@ -1,0 +1,16 @@
+rules:
+  - id: no-eval
+    pattern: eval($X)
+    message: Avoid eval
+    severity: WARNING
+    languages: [javascript, typescript]
+  - id: insecure-random
+    pattern: Math.random()
+    message: Insecure random
+    severity: INFO
+    languages: [javascript, typescript]
+  - id: console-log
+    pattern: console.log(...)
+    message: Remove console.log
+    severity: INFO
+    languages: [javascript, typescript]

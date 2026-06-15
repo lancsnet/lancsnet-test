@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Clear VSP SW Inventory Restore V5</title>
+<style>
+body{background:#070b14;color:#dbeafe;font-family:ui-monospace,Menlo,Consolas,monospace;padding:24px}
+.box{max-width:960px;background:#111827;border:1px solid #263245;border-radius:14px;padding:20px}
+a,button{color:#67e8f9;font-weight:700}
+button{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:8px 12px;cursor:pointer}
+pre{white-space:pre-wrap;background:#020617;padding:12px;border-radius:10px;max-height:360px;overflow:auto}
+</style>
+</head>
+<body>
+<div class="box">
+<h2>VSP SW Inventory restore/cache clear V5</h2>
+<p id="status">Clearing...</p>
+<pre id="removed"></pre>
+<p>
+  <a id="openShell" href="/">Open VSP shell clean</a>
+</p>
+<button onclick="location.href=document.getElementById('openShell').href">Open now</button>
+</div>
+<script>
+(function(){
+  var removed = [];
+  function hit(k,v){
+    return /sw[_-]?inventory|swinventory|SWINV_CACHEBUST/i.test(String(k||'')) ||
+           /sw[_-]?inventory|swinventory|SWINV_CACHEBUST/i.test(String(v||'')) ||
+           /selected.*panel|panel.*iframe|last.*panel|active.*panel|cachebust/i.test(String(k||''));
+  }
+  function clear(store,label){
+    try{
+      var keys=[];
+      for(var i=0;i<store.length;i++) keys.push(store.key(i));
+      keys.forEach(function(k){
+        var v='';
+        try{v=store.getItem(k)||'';}catch(e){}
+        if(hit(k,v)){
+          removed.push(label+': '+k+' = '+v);
+          try{store.removeItem(k);}catch(e){}
+        }
+      });
+    }catch(e){}
+  }
+  clear(localStorage,'localStorage');
+  clear(sessionStorage,'sessionStorage');
+
+  var shell='/?v=clean_swinv_v5_'+Date.now();
+  document.getElementById('status').textContent='Done. Removed '+removed.length+' stale SW Inventory restore/cache keys.';
+  document.getElementById('removed').textContent=removed.length?removed.join('\n'):'No matching stale keys found.';
+  document.getElementById('openShell').href=shell;
+})();
+</script>
+</body>
+</html>

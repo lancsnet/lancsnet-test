@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+
+<script>
+/* P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD
+   Final guard rule:
+   - Auth/status/login/logout always allowed.
+   - If a real visible Dashboard shell is visible, allow protected API.
+   - If a real visible login form is visible AND Dashboard shell is not visible, block protected API.
+   - Hidden login DOM must not block authenticated Dashboard.
+*/
+(function(){
+  if (window.__P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD__) return;
+  window.__P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD__ = true;
+
+  function norm(u){
+    u = String(u || '');
+    try {
+      if (u.indexOf('http://') === 0 || u.indexOf('https://') === 0) {
+        var x = new URL(u);
+        return x.pathname + x.search;
+      }
+    } catch(e) {}
+    return u;
+  }
+
+  function pathOf(input){
+    try { return norm(typeof input === 'string' ? input : ((input && input.url) || '')); }
+    catch(e) { return ''; }
+  }
+
+  function isReallyVisible(el){
+    try {
+      if (!el) return false;
+
+      var cur = el;
+      while (cur && cur.nodeType === 1) {
+        var st = window.getComputedStyle(cur);
+        if (!st || st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) return false;
+        if (cur.hidden) return false;
+        cur = cur.parentElement;
+      }
+
+      var r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return false;
+      if (r.bottom <= 0 || r.right <= 0) return false;
+      if (r.top >= window.innerHeight || r.left >= window.innerWidth) return false;
+
+      return true;
+    } catch(e) {
+      return false;
+    }
+  }
+
+  function textOf(doc){
+    try { return ((doc.body && doc.body.innerText) || '').toLowerCase(); }
+    catch(e) { return ''; }
+  }
+
+  function visibleDashboardIn(doc){
+    try {
+      var candidates = [
+        '#panel-dashboard',
+        '[data-panel="dashboard"]',
+        '.nav-item.active',
+        '.sidebar',
+        '.app-sidebar',
+        '.topbar',
+        '.kpi',
+        '#d-score',
+        '#d-critical',
+        '#d-high',
+        '#d-medium',
+        '#d-low'
+      ];
+
+      var visibleHits = 0;
+      for (var i = 0; i < candidates.length; i++) {
+        var els = Array.prototype.slice.call(doc.querySelectorAll(candidates[i]));
+        if (els.some(isReallyVisible)) visibleHits++;
+      }
+
+      var txt = textOf(doc);
+      var textHit =
+        txt.indexOf('dashboard') >= 0 &&
+        txt.indexOf('scan log') >= 0 &&
+        txt.indexOf('findings') >= 0 &&
+        txt.indexOf('remediation') >= 0;
+
+      var adminHit = txt.indexOf('admin@vsp.local') >= 0 || txt.indexOf('unclass') >= 0;
+
+      return visibleHits >= 2 || (textHit && adminHit);
+    } catch(e) {
+      return false;
+    }
+  }
+
+  function visibleLoginIn(doc){
+    try {
+      if (visibleDashboardIn(doc)) return false;
+
+      var pwds = Array.prototype.slice.call(doc.querySelectorAll('input[type="password"]'));
+      var visiblePwd = pwds.some(isReallyVisible);
+      if (!visiblePwd) return false;
+
+      var txt = textOf(doc);
+      var hasLoginText =
+        txt.indexOf('authenticate') >= 0 ||
+        txt.indexOf('consent notice') >= 0 ||
+        txt.indexOf('u.s. government warning') >= 0 ||
+        txt.indexOf('password') >= 0;
+
+      return visiblePwd && hasLoginText;
+    } catch(e) {
+      return false;
+    }
+  }
+
+  function parentVisibleDashboard(){
+    try {
+      if (window.parent && window.parent !== window && window.parent.document) {
+        return visibleDashboardIn(window.parent.document);
+      }
+    } catch(e) {}
+    return false;
+  }
+
+  function parentVisibleLogin(){
+    try {
+      if (window.parent && window.parent !== window && window.parent.document) {
+        return visibleLoginIn(window.parent.document);
+      }
+    } catch(e) {}
+    return false;
+  }
+
+  function publicApi(path){
+    return (
+      path.indexOf('/api/v1/status') === 0 ||
+      path.indexOf('/api/v1/auth/login') === 0 ||
+      path.indexOf('/api/v1/auth/logout') === 0 ||
+      path.indexOf('/api/auth/login') === 0 ||
+      path.indexOf('/api/auth/logout') === 0 ||
+      path.indexOf('/api/login') === 0 ||
+      path.indexOf('/api/logout') === 0 ||
+      path.indexOf('/api/health') === 0 ||
+      path.indexOf('/health') === 0
+    );
+  }
+
+  function protectedApi(path){
+    return (
+      path.indexOf('/api/v1/') === 0 ||
+      path.indexOf('/api/p4/') === 0
+    ) && !publicApi(path);
+  }
+
+  function shouldBlockProtected(){
+    // IMPORTANT: dashboard wins over hidden login DOM.
+    if (visibleDashboardIn(document)) return false;
+    if (parentVisibleDashboard()) return false;
+
+    if (visibleLoginIn(document)) return true;
+    if (parentVisibleLogin()) return true;
+
+    if (document.readyState === 'loading') return true;
+
+    var p = String(location.pathname || '');
+    if (p.indexOf('/panels/') >= 0 || p.endsWith('.html')) return true;
+
+    return false;
+  }
+
+  function fake(path){
+    return new Response(JSON.stringify({
+      skipped: true,
+      reason: 'visible_login_guard',
+      url: path,
+      guard: 'P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD'
+    }), {
+      status: 200,
+      headers: {'Content-Type':'application/json'}
+    });
+  }
+
+  var nativeFetch = window.fetch;
+  if (nativeFetch && !nativeFetch.__p8921_v11) {
+    window.fetch = function(input, init){
+      var path = pathOf(input);
+      if (protectedApi(path) && shouldBlockProtected()) {
+        console.warn('[VSP-V11] block protected API while visible login is active:', path);
+        return Promise.resolve(fake(path));
+      }
+      init = init || {};
+      init.credentials = init.credentials || 'include';
+      return nativeFetch(input, init);
+    };
+    window.fetch.__p8921_v11 = true;
+  }
+
+  var NativeXHR = window.XMLHttpRequest;
+  if (NativeXHR && !window.__P8921_V11_XHR__) {
+    window.__P8921_V11_XHR__ = true;
+    window.XMLHttpRequest = function(){
+      var xhr = new NativeXHR();
+      var open = xhr.open;
+      var send = xhr.send;
+      var url = '';
+
+      xhr.open = function(method, u){
+        url = norm(u);
+        return open.apply(xhr, arguments);
+      };
+
+      xhr.send = function(){
+        if (protectedApi(url) && shouldBlockProtected()) {
+          console.warn('[VSP-V11] block XHR while visible login is active:', url);
+          var body = JSON.stringify({skipped:true, reason:'visible_login_guard', url:url});
+          try {
+            Object.defineProperty(xhr, 'readyState', {value:4, configurable:true});
+            Object.defineProperty(xhr, 'status', {value:200, configurable:true});
+            Object.defineProperty(xhr, 'responseText', {value:body, configurable:true});
+            Object.defineProperty(xhr, 'response', {value:body, configurable:true});
+            if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange();
+            if (typeof xhr.onload === 'function') xhr.onload();
+          } catch(e) {}
+          return;
+        }
+        return send.apply(xhr, arguments);
+      };
+
+      return xhr;
+    };
+  }
+
+  window.__vspAuthDebug = function(){
+    return {
+      visibleLogin: visibleLoginIn(document),
+      visibleDashboard: visibleDashboardIn(document),
+      parentVisibleLogin: parentVisibleLogin(),
+      parentVisibleDashboard: parentVisibleDashboard(),
+      shouldBlockProtected: shouldBlockProtected(),
+      readyState: document.readyState,
+      path: location.pathname,
+      guard: 'P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD'
+    };
+  };
+})();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script src="/static/js/vsp_iframe_bootstrap.js"></script>
+<script>
+
+/* VSP auth fetch guard v2 — polling retry */
+(function(){
+  if (window.vspAuthFetch && window.vspAuthFetchVersion === 2) return;
+  window.vspAuthFetchVersion = 2;
+  
+  async function getToken(maxWait){
+    maxWait = maxWait || 2500;
+    var waited = 0;
+    var interval = 100;
+    while (waited < maxWait) {
+      // Check iframe
+      var tk = window.TOKEN || localStorage.getItem("vsp_token") || "";
+      if (tk && tk.length >= 20) return tk;
+      // Check parent (same-origin)
+      try {
+        tk = window.parent.TOKEN || window.parent.localStorage.getItem("vsp_token") || "";
+        if (tk && tk.length >= 20) {
+          window.TOKEN = tk;
+          try { localStorage.setItem("vsp_token", tk); } catch(e){}
+          return tk;
+        }
+      } catch(e) { /* cross-origin */ }
+      // Check top-level (if nested iframes)
+      try {
+        tk = window.top.TOKEN || "";
+        if (tk && tk.length >= 20) {
+          window.TOKEN = tk;
+          return tk;
+        }
+      } catch(e) {}
+      // Wait & retry
+      await new Promise(function(r){setTimeout(r, interval);});
+      waited += interval;
+    }
+    return "";
+  }
+  
+  window.vspAuthFetch = async function(url, opts){
+    opts = opts || {};
+    var tk = await getToken();
+    if (tk) {
+      opts.headers = Object.assign({}, opts.headers||{}, {"Authorization":"Bearer "+tk});
+    } else {
+      if (!/\/api\/v1\/auth\/(check|refresh|login|logout|sso\/)/.test(url)) console.warn("[VSP guard] no token after 2.5s:", url);
+    }
+    return _origFetch(url, opts);
+  };
+  
+  var _origFetch = window.fetch;
+  window.fetch = function(url, opts){
+    if (typeof url === "string" && url.indexOf("/api/") >= 0) {
+      if (opts && opts.headers && (opts.headers.Authorization || opts.headers.authorization)) {
+        return _origFetch(url, opts);
+      }
+      return window.vspAuthFetch(url, opts);
+    }
+    return _origFetch(url, opts);
+  };
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Integrations</title>
+<link rel="stylesheet" href="/vsp_enterprise_ui.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:transparent;font-family:var(--font-ui);color:var(--t1);font-size:13px;padding:16px}
+.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.hdr h2{font-family:var(--font-display);font-size:16px;font-weight:800}
+.hdr p{font-size:10px;color:var(--t3);font-family:var(--font-mono);margin-top:2px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:12px}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}
+.card-title{font-size:13px;font-weight:600}
+.card-body{padding:14px}
+.btn{padding:5px 12px;font-size:11px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--bg3);color:var(--t2);cursor:pointer;font-family:var(--font-mono);transition:all .15s;white-space:nowrap}
+.btn:hover{border-color:var(--border2);color:var(--t1)}
+.btn-primary{background:rgba(14,165,233,.15);border-color:rgba(14,165,233,.4);color:var(--accent)}
+.btn-success{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:var(--green)}
+.btn-danger{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:var(--red)}
+.btn-sm{padding:3px 8px;font-size:10px}
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-family:var(--font-mono);font-weight:600}
+.badge-ok{background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.25)}
+.badge-warn{background:rgba(245,158,11,.12);color:var(--amber);border:1px solid rgba(245,158,11,.25)}
+.badge-danger{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+.badge-neutral{background:var(--bg3);color:var(--t2);border:1px solid var(--border)}
+
+.int-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:14px}
+.int-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.int-header{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.int-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;font-family:var(--font-mono);font-weight:700}
+.int-name{font-size:13px;font-weight:600}
+.int-desc{font-size:10px;color:var(--t3);margin-top:1px}
+.int-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-ok{background:var(--green)}.dot-warn{background:var(--amber)}.dot-err{background:var(--red)}.dot-off{background:var(--t4)}
+.int-body{padding:12px 14px}
+.form-group{margin-bottom:10px}
+.form-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);font-family:var(--font-mono);display:block;margin-bottom:4px}
+.form-ctrl{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-md);padding:6px 10px;font-size:11px;color:var(--t1);outline:none;font-family:var(--font-mono)}
+.form-ctrl:focus{border-color:var(--border2)}
+.form-ctrl[type=password]{letter-spacing:2px}
+.int-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.status-row{display:flex;align-items:center;gap:6px;padding:5px 0;font-size:11px;color:var(--t3);border-bottom:1px solid rgba(99,179,255,.04)}
+.status-row:last-child{border-bottom:none}
+.status-label{flex:1}
+.status-val{font-family:var(--font-mono);font-size:10px}
+
+.sw-wrap{position:relative;width:32px;height:18px;flex-shrink:0}
+.sw-wrap input{opacity:0;position:absolute;inset:0;cursor:pointer;margin:0}
+.sw-track{position:absolute;inset:0;background:var(--bg4);border-radius:9px;transition:background .2s;pointer-events:none}
+.sw-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:var(--t3);border-radius:50%;transition:transform .2s,background .2s;pointer-events:none}
+.sw-wrap input:checked~.sw-track{background:var(--green)}
+.sw-wrap input:checked~.sw-thumb{transform:translateX(14px);background:#fff}
+
+.toast{position:fixed;bottom:16px;right:16px;z-index:9999;padding:8px 14px;border-radius:6px;font-size:12px;font-family:var(--font-mono);background:var(--bg2);border:1px solid var(--border2);color:var(--t1);display:none}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div><h2>Integrations</h2><p>Jira · Slack · GitHub · SMTP · ServiceNow · PagerDuty · VirusTotal</p></div>
+  <button class="btn btn-sm" onclick="testAllConnections()">⟳ Test all connections</button>
+</div>
+
+<!-- ══ NOTIFICATION CHANNELS ══ -->
+<div class="card">
+  <div class="card-head">
+    <div class="card-title">Notification channels</div>
+    <div style="font-size:10px;color:var(--t3);font-family:var(--font-mono)">Alert routing on gate FAIL / SLA breach / SOAR trigger</div>
+  </div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="int-status-dot dot-ok"></div>
+          <span style="font-size:12px;font-weight:600">Slack</span>
+          <span class="badge badge-ok" style="margin-left:auto">Connected</span>
+        </div>
+        <div class="form-group">
+          <div class="form-label">Webhook URL</div>
+          <input aria-label="https://hooks.slack.com/services/..." class="form-ctrl" type="password" id="slack-url" value="https://hooks.slack.com/services/T0xxx" placeholder="https://hooks.slack.com/services/...">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Channel</div>
+          <input aria-label="#channel" class="form-ctrl" id="slack-channel" value="#security-alerts" placeholder="#channel">
+        </div>
+        <div class="int-actions">
+          <button class="btn btn-sm btn-primary" onclick="saveSlack()">Save</button>
+          <button class="btn btn-sm" onclick="testSlack()">Test</button>
+        </div>
+      </div>
+
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="int-status-dot dot-warn"></div>
+          <span style="font-size:12px;font-weight:600">Email / SMTP</span>
+          <span class="badge badge-warn" style="margin-left:auto">Config needed</span>
+        </div>
+        <div class="form-group">
+          <div class="form-label">SMTP Host</div>
+          <input aria-label="smtp.gmail.com" class="form-ctrl" id="smtp-host" value="smtp.gmail.com" placeholder="smtp.gmail.com">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Port · User · Password</div>
+          <div style="display:grid;grid-template-columns:60px 1fr 1fr;gap:4px">
+            <input aria-label="587" class="form-ctrl" id="smtp-port" value="587" placeholder="587">
+            <input aria-label="user@domain" class="form-ctrl" id="smtp-user" value="soc@agency.gov" placeholder="user@domain">
+            <input aria-label="app password" class="form-ctrl" type="password" id="smtp-pass" placeholder="app password">
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="form-label">Alert recipients</div>
+          <input aria-label="email1, email2" class="form-ctrl" id="smtp-to" value="soc@agency.gov, ciso@agency.gov" placeholder="email1, email2">
+        </div>
+        <div class="int-actions">
+          <button class="btn btn-sm btn-primary" onclick="saveSMTP()">Save</button>
+          <button class="btn btn-sm" onclick="testSMTP()">Send test</button>
+        </div>
+      </div>
+
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="int-status-dot dot-off"></div>
+          <span style="font-size:12px;font-weight:600">MS Teams</span>
+          <span class="badge badge-neutral" style="margin-left:auto">Not configured</span>
+        </div>
+        <div class="form-group">
+          <div class="form-label">Webhook URL</div>
+          <input aria-label="https://xxx.webhook.office.com/..." class="form-ctrl" id="teams-url" placeholder="https://xxx.webhook.office.com/...">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Min severity</div>
+          <select aria-label="Teams Sev" class="form-ctrl" id="teams-sev">
+            <option value="CRITICAL">Critical only</option>
+            <option value="HIGH" selected>High and above</option>
+            <option value="MEDIUM">Medium and above</option>
+          </select>
+        </div>
+        <div class="int-actions">
+          <button class="btn btn-sm btn-primary" onclick="saveTeams()">Save</button>
+          <button class="btn btn-sm" onclick="testTeams()">Test</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="int-status-dot dot-off"></div>
+          <span style="font-size:12px;font-weight:600">PagerDuty</span>
+          <span class="badge badge-neutral" style="margin-left:auto">Not configured</span>
+        </div>
+        <div class="form-group">
+          <div class="form-label">Integration key (Events API v2)</div>
+          <input aria-label="a1b2c3d4..." class="form-ctrl" id="pd-key" placeholder="a1b2c3d4...">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Escalation policy</div>
+          <input aria-label="P0xxxxx" class="form-ctrl" id="pd-policy" placeholder="P0xxxxx">
+        </div>
+        <div class="int-actions">
+          <button class="btn btn-sm btn-primary" onclick="savePD()">Save</button>
+          <button class="btn btn-sm" onclick="testPD()">Test alert</button>
+        </div>
+      </div>
+
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="int-status-dot dot-off"></div>
+          <span style="font-size:12px;font-weight:600">Generic Webhook</span>
+          <span class="badge badge-neutral" style="margin-left:auto">Not configured</span>
+        </div>
+        <div class="form-group">
+          <div class="form-label">URL</div>
+          <input aria-label="https://your-endpoint.com/vsp-hook" class="form-ctrl" id="wh-url" placeholder="https://your-endpoint.com/vsp-hook">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Secret (HMAC-SHA256)</div>
+          <input aria-label="webhook secret" class="form-ctrl" type="password" id="wh-secret" placeholder="webhook secret">
+        </div>
+        <div class="int-actions">
+          <button class="btn btn-sm btn-primary" onclick="saveWebhook()">Save</button>
+          <button class="btn btn-sm" onclick="testWebhook()">Test</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TICKETING ══ -->
+<div class="int-grid">
+  <div class="int-card">
+    <div class="int-header">
+      <div class="int-icon" style="background:rgba(59,130,246,.12);color:#60a5fa">J</div>
+      <div style="flex:1">
+        <div class="int-name">Jira</div>
+        <div class="int-desc">Auto-create tickets on gate FAIL / critical finding</div>
+      </div>
+      <div class="int-status-dot dot-warn"></div>
+      <span class="badge badge-warn">Not connected</span>
+    </div>
+    <div class="int-body">
+      <div class="form-group">
+        <div class="form-label">Jira URL</div>
+        <input aria-label="https://yourorg.atlassian.net" class="form-ctrl" id="jira-url" placeholder="https://yourorg.atlassian.net">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-group">
+          <div class="form-label">Email</div>
+          <input aria-label="user@org.com" class="form-ctrl" id="jira-email" placeholder="user@org.com">
+        </div>
+        <div class="form-group">
+          <div class="form-label">API Token</div>
+          <input aria-label="ATATT3xF..." class="form-ctrl" type="password" id="jira-token" placeholder="ATATT3xF...">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-group">
+          <div class="form-label">Project key</div>
+          <input aria-label="e.g. SEC" class="form-ctrl" id="jira-project" value="VSP" placeholder="e.g. SEC">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Issue type</div>
+          <select aria-label="Jira Type" class="form-ctrl" id="jira-type">
+            <option>Bug</option><option>Task</option><option>Story</option><option>Security Issue</option>
+          </select>
+        </div>
+      </div>
+      <div class="int-actions">
+        <button class="btn btn-sm btn-primary" onclick="saveJira()">Save & connect</button>
+        <button class="btn btn-sm" onclick="testJira()">Test connection</button>
+        <button class="btn btn-sm" onclick="testCreateJiraTicket()">Test create ticket</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="int-card">
+    <div class="int-header">
+      <div class="int-icon" style="background:rgba(139,92,246,.12);color:var(--purple)">SN</div>
+      <div style="flex:1">
+        <div class="int-name">ServiceNow</div>
+        <div class="int-desc">Create incidents / change requests from VSP findings</div>
+      </div>
+      <div class="int-status-dot dot-off"></div>
+      <span class="badge badge-neutral">Not configured</span>
+    </div>
+    <div class="int-body">
+      <div class="form-group">
+        <div class="form-label">Instance URL</div>
+        <input aria-label="https://yourorg.service-now.com" class="form-ctrl" id="sn-url" placeholder="https://yourorg.service-now.com">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-group">
+          <div class="form-label">Username</div>
+          <input aria-label="vsp_integration" class="form-ctrl" id="sn-user" placeholder="vsp_integration">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Password / OAuth</div>
+          <input aria-label="password or bearer token" class="form-ctrl" type="password" id="sn-pass" placeholder="password or bearer token">
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="form-label">Table (default: incident)</div>
+        <input aria-label="incident" class="form-ctrl" id="sn-table" value="incident" placeholder="incident">
+      </div>
+      <div class="int-actions">
+        <button class="btn btn-sm btn-primary" onclick="saveSN()">Save & connect</button>
+        <button class="btn btn-sm" onclick="testSN()">Test</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCM / DEVOPS ══ -->
+<div class="int-grid">
+  <div class="int-card">
+    <div class="int-header">
+      <div class="int-icon" style="background:rgba(34,197,94,.12);color:var(--green)">GH</div>
+      <div style="flex:1">
+        <div class="int-name">GitHub</div>
+        <div class="int-desc">PR comment on gate FAIL · status checks · SARIF upload</div>
+      </div>
+      <div class="int-status-dot dot-warn"></div>
+      <span class="badge badge-warn">Token needed</span>
+    </div>
+    <div class="int-body">
+      <div class="form-group">
+        <div class="form-label">Personal Access Token (repo, PR comment scope)</div>
+        <input aria-label="ghp_xxxxxxxxxxxxxxxxxxxx" class="form-ctrl" type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-group">
+          <div class="form-label">Org / Owner</div>
+          <input aria-label="your-org" class="form-ctrl" id="gh-org" placeholder="your-org">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Default repo</div>
+          <input aria-label="your-repo" class="form-ctrl" id="gh-repo" placeholder="your-repo">
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px">
+          <label class="sw-wrap"><input aria-label="Gh Pr Comment" type="checkbox" id="gh-pr-comment" checked><div class="sw-track"></div><div class="sw-thumb"></div></label>
+          <span style="color:var(--t2)">Post PR comment on gate FAIL</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px">
+          <label class="sw-wrap"><input aria-label="Gh Status Check" type="checkbox" id="gh-status-check" checked><div class="sw-track"></div><div class="sw-thumb"></div></label>
+          <span style="color:var(--t2)">Set commit status check (vsp/gate)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px">
+          <label class="sw-wrap"><input aria-label="Gh Sarif" type="checkbox" id="gh-sarif"><div class="sw-track"></div><div class="sw-thumb"></div></label>
+          <span style="color:var(--t2)">Upload SARIF to GitHub Security tab</span>
+        </div>
+      </div>
+      <div class="int-actions">
+        <button class="btn btn-sm btn-primary" onclick="saveGitHub()">Save & connect</button>
+        <button class="btn btn-sm" onclick="testGitHub()">Test</button>
+        <button class="btn btn-sm" onclick="testPRComment()">Test PR comment</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="int-card">
+    <div class="int-header">
+      <div class="int-icon" style="background:rgba(249,115,22,.12);color:var(--orange)">GL</div>
+      <div style="flex:1">
+        <div class="int-name">GitLab</div>
+        <div class="int-desc">MR comment · pipeline status · security reports</div>
+      </div>
+      <div class="int-status-dot dot-off" id="gitlab-dot"></div>
+      <span class="badge badge-neutral" id="gitlab-status">Not configured</span>
+    </div>
+    <div class="int-body">
+      <div class="form-group">
+        <div class="form-label">GitLab URL (default: gitlab.com)</div>
+        <input aria-label="https://gitlab.com" class="form-ctrl" id="gl-url" value="" placeholder="https://gitlab.com">
+      </div>
+      <div class="form-group">
+        <div class="form-label">Personal / Project Access Token</div>
+        <input aria-label="Enter GitLab Personal Access Token" class="form-ctrl" type="password" id="gl-token" placeholder="Enter GitLab Personal Access Token">
+      </div>
+      <div class="form-group">
+        <div class="form-label">Project ID</div>
+        <input aria-label="12345678" class="form-ctrl" id="gl-project" placeholder="12345678">
+      </div>
+      <div class="int-actions">
+        <button class="btn btn-sm btn-primary" onclick="saveGitLab()">Save & connect</button>
+        <button class="btn btn-sm" onclick="testGitLab()">Test</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SECURITY ENRICHMENT ══ -->
+<div class="card">
+  <div class="card-head">
+    <div class="card-title">Security enrichment</div>
+    <div style="font-size:10px;color:var(--t3);font-family:var(--font-mono)">Hash check · IOC lookup · CVE enrichment</div>
+  </div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="int-status-dot dot-warn"></div>
+          <span style="font-size:12px;font-weight:600">VirusTotal</span>
+          <span class="badge badge-warn" style="margin-left:auto">API key needed</span>
+        </div>
+        <div class="form-group">
+          <div class="form-label">API Key (v3)</div>
+          <input aria-label="64-char API key" class="form-ctrl" type="password" id="vt-key" placeholder="64-char API key">
+        </div>
+        <div style="font-size:10px;color:var(--t3);margin-bottom:8px">Used for binary/hash check in SW Inventory panel. Free tier: 500 lookups/day.</div>
+        <div class="int-actions">
+          <button class="btn btn-sm btn-primary" onclick="saveVT()">Save</button>
+          <button class="btn btn-sm" onclick="testVT()">Test lookup</button>
+        </div>
+      </div>
+
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="int-status-dot dot-ok"></div>
+          <span style="font-size:12px;font-weight:600">NVD / NIST</span>
+          <span class="badge badge-ok" style="margin-left:auto">Active</span>
+        </div>
+        <div class="form-group">
+          <div class="form-label">API Key (optional — higher rate limit)</div>
+          <input aria-label="Optional — increases to 50 req/30s" class="form-ctrl" type="password" id="nvd-key" placeholder="Optional — increases to 50 req/30s">
+        </div>
+        <div class="status-row"><span class="status-label">Last sync</span><span class="status-val c-green">5 min ago</span></div>
+        <div class="status-row"><span class="status-label">CVEs indexed</span><span class="status-val">28,413</span></div>
+        <div class="int-actions">
+          <button class="btn btn-sm btn-primary" onclick="saveNVD()">Save key</button>
+          <button class="btn btn-sm" onclick="syncNVD()">Force sync</button>
+        </div>
+      </div>
+
+      <div style="background:var(--bg3);border-radius:var(--r-md);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <div class="int-status-dot dot-ok"></div>
+          <span style="font-size:12px;font-weight:600">OSV / MISP</span>
+          <span class="badge badge-ok" style="margin-left:auto">Active</span>
+        </div>
+        <div class="form-group">
+          <div class="form-label">MISP URL (optional)</div>
+          <input aria-label="https://misp.yourdomain.com" class="form-ctrl" id="misp-url" placeholder="https://misp.yourdomain.com">
+        </div>
+        <div class="form-group">
+          <div class="form-label">MISP API Key</div>
+          <input aria-label="MISP auth key" class="form-ctrl" type="password" id="misp-key" placeholder="MISP auth key">
+        </div>
+        <div class="int-actions">
+          <button class="btn btn-sm btn-primary" onclick="saveMISP()">Save</button>
+          <button class="btn btn-sm" onclick="testMISP()">Test</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONNECTION TEST LOG ══ -->
+<div class="card">
+  <div class="card-head">
+    <div class="card-title">Connection test log</div>
+    <button class="btn btn-sm" onclick="clearLog()">Clear</button>
+  </div>
+  <div class="card-body" style="padding:0">
+    <div id="test-log" style="font-family:var(--font-mono);font-size:10px;padding:12px;max-height:180px;overflow-y:auto;line-height:1.7;color:var(--t2)">
+      <span style="color:var(--t3)">No tests run yet. Click "Test" on any integration above.</span>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+var TOKEN='', API='';
+function showToast(msg,type){
+  var t=document.getElementById('toast'); t.textContent=msg; t.style.display='block';
+  t.style.borderColor=type==='success'?'rgba(34,197,94,.4)':type==='error'?'rgba(239,68,68,.4)':'var(--border2)';
+  setTimeout(()=>{t.style.display='none';},2500);
+}
+function log(msg,type){
+  var d=document.getElementById('test-log');
+  var ts=new Date().toTimeString().slice(0,8);
+  var color={ok:'var(--green)',error:'var(--red)',warn:'var(--amber)',info:'var(--cyan)'}[type]||'var(--t2)';
+  d.innerHTML+=`<div><span style="color:var(--t3)">${ts}</span> <span style="color:${color}">${msg}</span></div>`;
+  d.scrollTop=d.scrollHeight;
+  if(d.querySelector('span.c-t3')) d.querySelector('span.c-t3').parentElement?.remove?.();
+}
+async function ensureToken(){
+  if(TOKEN) return;
+  TOKEN=window.parent?.TOKEN||window.TOKEN||localStorage.getItem('vsp_token')||'demo';
+}
+async function saveConfig(name,data){
+  await ensureToken();
+  try{
+    var r=await fetch('/api/v1/integrations/'+name,{method:'POST',headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(r.ok){showToast(name+' config saved','success');log(name+' · config saved','ok');}
+    else throw new Error('HTTP '+r.status);
+  }catch(e){showToast(name+' save failed: '+e.message,'error');log(name+' · ✗ save failed: '+e.message,'error');}
+}
+async function testConn(name,endpoint){
+  await ensureToken();
+  log(name+' · testing connection…','info');
+  try{
+    var r=await fetch(endpoint||'/api/v1/integrations/'+name+'/test',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN}});
+    var data={};
+    try{data=await r.json();}catch(_){}
+    if(r.ok && data.ok===true){
+      log(name+' · ✓ connected','ok');showToast(name+' connected','success');
+    } else {
+      var msg=data.error||data.hint||('HTTP '+r.status);
+      log(name+' · ✗ '+msg,'error');showToast(name+' test failed: '+msg,'error');
+    }
+  }catch(e){log(name+' · ✗ '+e.message,'error');showToast(name+' test failed','error');}
+}
+
+function saveSlack(){
+  var url=document.getElementById('slack-url').value;
+  if(!url){log('Slack · ✗ Webhook URL is required','error');showToast('Slack: enter Webhook URL first','error');return;}
+  saveConfig('slack',{url:url,channel:document.getElementById('slack-channel').value});
+}
+function testSlack(){
+  var url=document.getElementById('slack-url').value;
+  if(!url){log('Slack · ✗ Webhook URL is required','error');showToast('Slack: enter URL first','error');return;}
+  testConn('Slack','/api/v1/integrations/slack/test');
+}
+function saveSMTP(){
+  var host=document.getElementById('smtp-host').value;
+  var user=document.getElementById('smtp-user').value;
+  var pass=document.getElementById('smtp-pass').value;
+  var to=document.getElementById('smtp-to').value;
+  if(!host){log('SMTP · ✗ SMTP host is required','error');showToast('SMTP: enter host first','error');return;}
+  if(!user){log('SMTP · ✗ SMTP user is required','error');showToast('SMTP: enter user first','error');return;}
+  if(!pass){log('SMTP · ✗ App password is required','error');showToast('SMTP: enter app password first','error');return;}
+  if(!to){log('SMTP · ✗ Alert recipients required','error');showToast('SMTP: enter recipients first','error');return;}
+  saveConfig('smtp',{host:host,port:document.getElementById('smtp-port').value,user:user,password:pass,to:to});
+}
+function testSMTP(){
+  var host=document.getElementById('smtp-host').value;
+  var user=document.getElementById('smtp-user').value;
+  var pass=document.getElementById('smtp-pass').value;
+  var to=document.getElementById('smtp-to').value;
+  if(!host){log('SMTP · ✗ SMTP host is required','error');showToast('SMTP: enter host first','error');return;}
+  if(!user){log('SMTP · ✗ SMTP user is required','error');showToast('SMTP: enter user first','error');return;}
+  if(!pass){log('SMTP · ✗ App password is required','error');showToast('SMTP: enter app password first','error');return;}
+  if(!to){log('SMTP · ✗ Alert recipients required','error');showToast('SMTP: enter recipients first','error');return;}
+  log('SMTP · sending test email to '+to+'…','info');
+  testConn('SMTP','/api/v1/integrations/smtp/test');
+}
+function saveTeams(){
+  var url=document.getElementById('teams-url').value;
+  if(!url){log('Teams · ✗ Webhook URL is required','error');showToast('Teams: enter Webhook URL first','error');return;}
+  saveConfig('teams',{url:url,min_sev:document.getElementById('teams-sev').value});
+}
+function testTeams(){
+  var url=document.getElementById('teams-url').value;
+  if(!url){log('Teams · ✗ Webhook URL is required','error');showToast('Teams: enter URL first','error');return;}
+  testConn('Teams','/api/v1/integrations/teams/test');
+}
+function savePD(){
+  var key=document.getElementById('pd-key').value;
+  if(!key){log('PagerDuty · ✗ Integration key is required','error');showToast('PagerDuty: enter integration key first','error');return;}
+  saveConfig('pagerduty',{key:key,policy:document.getElementById('pd-policy').value});
+}
+function testPD(){
+  var key=document.getElementById('pd-key').value;
+  if(!key){log('PagerDuty · ✗ Integration key is required','error');showToast('PagerDuty: enter key first','error');return;}
+  testConn('PagerDuty','/api/v1/integrations/pagerduty/test');
+}
+function saveWebhook(){
+  var url=document.getElementById('wh-url').value;
+  if(!url){log('Webhook · ✗ URL is required','error');showToast('Webhook: enter URL first','error');return;}
+  saveConfig('webhook',{url:url,secret:document.getElementById('wh-secret').value});
+}
+function testWebhook(){
+  var url=document.getElementById('wh-url').value;
+  if(!url){log('Webhook · ✗ URL is required','error');showToast('Webhook: enter URL first','error');return;}
+  testConn('Webhook','/api/v1/integrations/webhook/test');
+}
+function saveJira(){
+  var url=document.getElementById('jira-url').value;
+  var token=document.getElementById('jira-token').value;
+  var email=document.getElementById('jira-email').value;
+  if(!url){log('Jira · ✗ Jira URL is required','error');showToast('Jira: enter URL first','error');return;}
+  if(!email){log('Jira · ✗ Email is required','error');showToast('Jira: enter email first','error');return;}
+  if(!token){log('Jira · ✗ API token is required','error');showToast('Jira: enter API token first','error');return;}
+  saveConfig('jira',{url:url,email:email,token:token,project:document.getElementById('jira-project').value,issue_type:document.getElementById('jira-type').value});
+}
+function testJira(){
+  var url=document.getElementById('jira-url').value;
+  if(!url){log('Jira · ✗ URL is required','error');showToast('Jira: enter URL first','error');return;}
+  testConn('Jira','/api/v1/integrations/jira/test');
+}
+function testCreateJiraTicket(){
+  var url=document.getElementById('jira-url').value;
+  var token=document.getElementById('jira-token').value;
+  var project=document.getElementById('jira-project').value;
+  if(!url){log('Jira · ✗ URL is required','error');showToast('Jira: enter URL first','error');return;}
+  if(!token){log('Jira · ✗ API token is required','error');showToast('Jira: enter token first','error');return;}
+  if(!project){log('Jira · ✗ Project key is required','error');showToast('Jira: enter project key first','error');return;}
+  log('Jira · creating test ticket in project '+project+'…','info');
+  testConn('Jira ticket create','/api/v1/integrations/jira/test-ticket');
+}
+function saveSN(){
+  var url=document.getElementById('sn-url').value;
+  var user=document.getElementById('sn-user').value;
+  var pass=document.getElementById('sn-pass').value;
+  if(!url){log('ServiceNow · ✗ Instance URL is required','error');showToast('ServiceNow: enter URL first','error');return;}
+  if(!user){log('ServiceNow · ✗ Username is required','error');showToast('ServiceNow: enter username first','error');return;}
+  if(!pass){log('ServiceNow · ✗ Password/OAuth is required','error');showToast('ServiceNow: enter password first','error');return;}
+  saveConfig('servicenow',{url:url,user:user,password:pass,table:document.getElementById('sn-table').value});
+}
+function testSN(){
+  var url=document.getElementById('sn-url').value;
+  var user=document.getElementById('sn-user').value;
+  if(!url){log('ServiceNow · ✗ Instance URL is required','error');showToast('ServiceNow: enter URL first','error');return;}
+  if(!user){log('ServiceNow · ✗ Username is required','error');showToast('ServiceNow: enter username first','error');return;}
+  testConn('ServiceNow','/api/v1/integrations/servicenow/test');
+}
+function saveGitHub(){
+  var token=document.getElementById('gh-token').value;
+  var org=document.getElementById('gh-org').value;
+  var repo=document.getElementById('gh-repo').value;
+  if(!token){log('GitHub · ✗ Personal access token is required','error');showToast('GitHub: enter token first','error');return;}
+  if(!org){log('GitHub · ✗ Org/Owner is required','error');showToast('GitHub: enter org/owner first','error');return;}
+  if(!repo){log('GitHub · ✗ Default repo is required','error');showToast('GitHub: enter repo first','error');return;}
+  saveConfig('github',{token:token,org:org,repo:repo,pr_comment:document.getElementById('gh-pr-comment').checked,status_check:document.getElementById('gh-status-check').checked,sarif_upload:document.getElementById('gh-sarif').checked});
+}
+function testGitHub(){
+  var token=document.getElementById('gh-token').value;
+  if(!token){log('GitHub · ✗ Token is required','error');showToast('GitHub: enter token first','error');return;}
+  testConn('GitHub','/api/v1/integrations/github/test');
+}
+function testPRComment(){
+  var token=document.getElementById('gh-token').value;
+  var repo=document.getElementById('gh-repo').value;
+  if(!token){log('GitHub · ✗ Token is required for PR comment test','error');showToast('GitHub: enter token first','error');return;}
+  if(!repo){log('GitHub · ✗ Repo is required for PR comment test','error');showToast('GitHub: enter repo first','error');return;}
+  log('GitHub · posting test PR comment…','info');
+  testConn('GitHub PR comment','/api/v1/integrations/github/test-pr-comment');
+}
+function saveGitLab(){
+  var token=document.getElementById('gl-token').value;
+  var project=document.getElementById('gl-project').value;
+  if(!token){log('GitLab · ✗ Access token is required','error');showToast('GitLab: enter access token first','error');return;}
+  if(!project){log('GitLab · ✗ Project ID is required','error');showToast('GitLab: enter project ID first','error');return;}
+  saveConfig('gitlab',{url:document.getElementById('gl-url').value,token:token,project_id:project});
+}
+function testGitLab(){
+  var token=document.getElementById('gl-token').value;
+  if(!token){log('GitLab · ✗ Access token is required','error');showToast('GitLab: enter token first','error');return;}
+  testConn('GitLab','/api/v1/integrations/gitlab/test');
+}
+function saveVT(){
+  var key=document.getElementById('vt-key').value;
+  if(!key){log('VirusTotal · ✗ API key is required','error');showToast('VirusTotal: enter API key first','error');return;}
+  saveConfig('virustotal',{api_key:key});
+}
+function testVT(){
+  var key=document.getElementById('vt-key').value;
+  if(!key){log('VirusTotal · ✗ API key is required','error');showToast('VirusTotal: enter API key first','error');return;}
+  log('VirusTotal · hash lookup test…','info');
+  testConn('VirusTotal','/api/v1/integrations/virustotal/test');
+}
+function saveNVD(){
+  var key=document.getElementById('nvd-key').value;
+  if(!key){log('NVD · saving without API key — rate limited to 5 req/30s','warn');showToast('NVD: no API key — rate limited mode','warn');}
+  saveConfig('nvd',{api_key:key});
+}
+function syncNVD(){log('NVD · forcing full sync…','info');showToast('NVD sync triggered','info');}
+function saveMISP(){
+  var url=document.getElementById('misp-url').value;
+  var key=document.getElementById('misp-key').value;
+  if(!url){log('MISP · ✗ URL is required','error');showToast('MISP: enter URL first','error');return;}
+  if(!key){log('MISP · ✗ API key is required','error');showToast('MISP: enter API key first','error');return;}
+  saveConfig('misp',{url:url,key:key});
+}
+function testMISP(){
+  var url=document.getElementById('misp-url').value;
+  var key=document.getElementById('misp-key').value;
+  if(!url){log('MISP · ✗ URL is required','error');showToast('MISP: enter URL first','error');return;}
+  if(!key){log('MISP · ✗ API key is required','error');showToast('MISP: enter API key first','error');return;}
+  testConn('MISP','/api/v1/integrations/misp/test');
+}
+async function testAllConnections(){
+  log('Testing all configured integrations…','info');
+  var ran=0;
+  if(document.getElementById('slack-url').value){testConn('Slack','/api/v1/integrations/slack/test');ran++;}
+  if(document.getElementById('smtp-host').value){testConn('SMTP','/api/v1/integrations/smtp/test');ran++;}
+  if(document.getElementById('jira-url').value){testConn('Jira','/api/v1/integrations/jira/test');ran++;}
+  if(document.getElementById('gh-token').value){testConn('GitHub','/api/v1/integrations/github/test');ran++;}
+  if(document.getElementById('teams-url').value){testConn('Teams','/api/v1/integrations/teams/test');ran++;}
+  if(document.getElementById('pd-key').value){testConn('PagerDuty','/api/v1/integrations/pagerduty/test');ran++;}
+  if(document.getElementById('wh-url').value){testConn('Webhook','/api/v1/integrations/webhook/test');ran++;}
+  if(document.getElementById('sn-url').value){testConn('ServiceNow','/api/v1/integrations/servicenow/test');ran++;}
+  if(document.getElementById('gl-token').value){testConn('GitLab','/api/v1/integrations/gitlab/test');ran++;}
+  if(document.getElementById('vt-key').value){testConn('VirusTotal','/api/v1/integrations/virustotal/test');ran++;}
+  if(document.getElementById('misp-url').value){testConn('MISP','/api/v1/integrations/misp/test');ran++;}
+  if(ran===0){log('No integrations configured yet — fill in credentials first','warn');showToast('No integrations configured','warn');}
+  else{log('Running '+ran+' connection test(s)…','info');}
+}
+function clearLog(){document.getElementById('test-log').innerHTML='<span style="color:var(--t3)">Log cleared.</span>';}
+
+window.addEventListener('message', e => {
+
+  if (!window.VSPOrigin.check(e)) return;
+
+  if(e.data?.type==='vsp:token'&&e.data.token)TOKEN=e.data.token;
+
+});
+</script>
+
+
+
+<!-- VSP-UNI4-POLISH-START -->
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+ * VSP Universal Panel Polish v4 — Admin batch
+ *   Inject vào: users / settings / integrations / sso_admin
+ * ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  if (window.__VSP_UNI_POLISH_V4__) return;
+  window.__VSP_UNI_POLISH_V4__ = true;
+
+  function $(s, ctx) { return (ctx || document).querySelector(s); }
+  function $$(s, ctx) { return Array.from((ctx || document).querySelectorAll(s)); }
+  function $id(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function pretty(o) { try { return JSON.stringify(o, null, 2); } catch (e) { return String(o); } }
+  function authFetch(url, opts) { return (window.vspAuthFetch || window.fetch)(url, opts || {}); }
+  function copy(t) { try { navigator.clipboard.writeText(t); toast('Copied', 'success'); } catch (e) {} }
+  function downloadFile(name, content, mime) {
+    const blob = new Blob([content], { type: mime || 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function relativeTime(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts); if (isNaN(d.getTime())) return '—';
+    const diff = Date.now() - d.getTime();
+    const days = Math.floor(diff / 86400000);
+    const hrs = Math.floor((diff % 86400000) / 3600000);
+    if (days > 30) return Math.floor(days / 30) + 'mo ago';
+    if (days > 0) return days + 'd ago';
+    if (hrs > 0) return hrs + 'h ago';
+    return Math.floor(diff / 60000) + 'm ago';
+  }
+
+  const path = location.pathname;
+  const PANEL =
+    /users\.html/.test(path)         ? 'users' :
+    /settings\.html/.test(path)      ? 'settings' :
+    /integrations\.html/.test(path)  ? 'integrations' :
+    /sso_admin\.html/.test(path)     ? 'sso_admin' : 'unknown';
+
+  (window.VSP_DEBUG && console.log('[VSP-UNI-POLISH-V4] Loaded for panel:', PANEL));
+
+  // ─── Toast ────────────────────────────────────────────────────────────────
+  let tcontainer = null;
+  function ensureToastContainer() {
+    if (tcontainer) return tcontainer;
+    tcontainer = document.createElement('div');
+    tcontainer.id = 'vsp-uni4-toasts';
+    tcontainer.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none';
+    document.body.appendChild(tcontainer);
+    return tcontainer;
+  }
+  function toast(msg, type) {
+    type = type || 'info';
+    const colors = {
+      success: { bg: 'rgba(16,185,129,.15)', border: '#10b981', icon: '✓' },
+      error:   { bg: 'rgba(239,68,68,.15)',  border: '#ef4444', icon: '✗' },
+      warn:    { bg: 'rgba(245,158,11,.15)', border: '#f59e0b', icon: '⚠' },
+      info:    { bg: 'rgba(59,130,246,.15)', border: '#3b82f6', icon: 'ℹ' }
+    };
+    const c = colors[type] || colors.info;
+    const t = document.createElement('div');
+    t.style.cssText = `pointer-events:auto;background:${c.bg};border-left:3px solid ${c.border};padding:10px 14px;border-radius:6px;font-size:12px;color:var(--t1,#e5e7eb);min-width:240px;max-width:380px;box-shadow:0 4px 12px rgba(0,0,0,.4);backdrop-filter:blur(8px);animation:vspUNI4ToastIn .25s ease;display:flex;gap:10px;align-items:flex-start`;
+    t.innerHTML = `<span style="font-size:14px;color:${c.border};flex-shrink:0">${c.icon}</span><span style="flex:1;line-height:1.4">${esc(msg)}</span>`;
+    ensureToastContainer().appendChild(t);
+    setTimeout(() => {
+      t.style.transition = 'opacity .2s, transform .2s';
+      t.style.opacity = '0'; t.style.transform = 'translateX(20px)';
+      setTimeout(() => t.remove(), 250);
+    }, 3500);
+  }
+  if (!$id('vsp-uni4-toast-css')) {
+    const s = document.createElement('style'); s.id = 'vsp-uni4-toast-css';
+    s.textContent = '@keyframes vspUNI4ToastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}';
+    document.head.appendChild(s);
+  }
+  if (!window.__vspUni4OverrideAlert) {
+    window.__vspUni4OverrideAlert = true;
+    window.alert = function (msg) {
+      if (/^✅|^✓/.test(msg)) toast(String(msg).replace(/^[✅✓]\s*/, ''), 'success');
+      else if (/^❌|^✗/.test(msg)) toast(String(msg).replace(/^[❌✗]\s*/, ''), 'error');
+      else if (/error|fail/i.test(msg)) toast(msg, 'error');
+      else if (/⚠/.test(msg)) toast(String(msg).replace(/^⚠\s*/, ''), 'warn');
+      else toast(msg, 'info');
+    };
+  }
+
+  // ─── Modal ────────────────────────────────────────────────────────────────
+  function showModal(opts) {
+    closeModal();
+    const ov = document.createElement('div');
+    ov.id = 'vsp-uni4-modal-ov';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)';
+    ov.onclick = e => { if (e.target === ov) closeModal(); };
+    const box = document.createElement('div');
+    box.style.cssText = `background:var(--bg0,#0a0a0a);border:1px solid var(--bd,#27272a);border-radius:8px;max-width:${opts.width || '720px'};width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);font-size:12px;color:var(--t1,#e5e7eb)`;
+    box.innerHTML =
+      `<div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--bd,#27272a);position:sticky;top:0;background:var(--bg0,#0a0a0a);z-index:1">
+         <div style="font-size:13px;font-weight:600;flex:1">${esc(opts.title || '')}</div>
+         <button onclick="window._vspUNI4.close()" style="background:transparent;border:0;color:var(--t2,#a1a1aa);font-size:18px;cursor:pointer;padding:0 4px">×</button>
+       </div>
+       <div style="padding:18px">${opts.body || ''}</div>` +
+      (opts.footer ? `<div style="display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--bd,#27272a);background:var(--bg1,#111);position:sticky;bottom:0;justify-content:flex-end">${opts.footer}</div>` : '');
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    const escH = e => { if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', escH); } };
+    document.addEventListener('keydown', escH);
+  }
+  function closeModal() {
+    const ov = $id('vsp-uni4-modal-ov');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  }
+  function row(label, value, copyable) {
+    const v = String(value == null ? '—' : value);
+    const btn = copyable ? `<button class="btn btn-sm" style="padding:1px 6px;font-size:9px" onclick="window._vspUNI4.copy('${esc(v).replace(/'/g, '&#39;')}')">📋</button>` : '';
+    return '<div style="display:flex;gap:12px;padding:6px 0;border-bottom:1px solid var(--bd,#27272a);align-items:flex-start">'
+      + '<div style="min-width:140px;color:var(--t3);font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding-top:2px">' + esc(label) + '</div>'
+      + '<div style="flex:1;font-size:11px;line-height:1.5;word-break:break-word">' + esc(v) + '</div>'
+      + (btn ? '<div style="flex-shrink:0">' + btn + '</div>' : '')
+      + '</div>';
+  }
+
+  const UNI4 = window._vspUNI4 = { close: closeModal, copy: copy, toast: toast, showModal: showModal };
+
+  // ─── Filter bar (shared) ──────────────────────────────────────────────────
+  function injectFilterBar(container, filters, onChange) {
+    if (!container) return null;
+    if (container.querySelector('.vsp-uni4-filter')) return container.querySelector('.vsp-uni4-filter');
+    const bar = document.createElement('div');
+    bar.className = 'vsp-uni4-filter';
+    bar.style.cssText = 'display:flex;gap:6px;align-items:center;padding:10px 12px 0;flex-wrap:wrap;font-size:11px';
+    bar.innerHTML = ''
+      + (filters.search !== false
+          ? '<input name="search-filter" aria-label="Search filter" class="vsp-uni4-q" placeholder="' + esc(filters.searchPlaceholder || 'Search…') + '" style="font-size:11px;padding:5px 10px;flex:1;min-width:200px;background:var(--bg1,#111);border:1px solid var(--bd,#27272a);color:var(--t1,#e5e7eb);border-radius:4px">' : '')
+      + (filters.pills ? renderPillGroup(filters.pills) : '')
+      + (filters.csv !== false
+          ? '<button class="btn btn-sm vsp-uni4-csv" style="font-size:10px">↓ CSV</button>' : '')
+      + '<span class="vsp-uni4-count" style="margin-left:auto;font-size:10px;color:var(--t3)"></span>';
+    container.insertBefore(bar, container.firstChild);
+
+    if (!$id('vsp-uni4-pill-css')) {
+      const css = document.createElement('style'); css.id = 'vsp-uni4-pill-css';
+      css.textContent = '.vsp-uni4-pill{background:transparent;border:0;padding:5px 9px;font-size:10px;font-weight:500;cursor:pointer;border-radius:3px;color:var(--t2,#a1a1aa);font-family:inherit}.vsp-uni4-pill:hover{color:var(--t1,#e5e7eb)}.vsp-uni4-pill-active{background:var(--bg2,#1c1c1c);color:var(--t1,#e5e7eb)!important}';
+      document.head.appendChild(css);
+    }
+    const q = bar.querySelector('.vsp-uni4-q');
+    const csvBtn = bar.querySelector('.vsp-uni4-csv');
+    if (q) q.addEventListener('input', () => onChange(getFilterState(bar)));
+    bar.querySelectorAll('.vsp-uni4-pill').forEach(p => {
+      p.addEventListener('click', () => {
+        bar.querySelectorAll('.vsp-uni4-pill[data-group="' + p.dataset.group + '"]').forEach(x => x.classList.remove('vsp-uni4-pill-active'));
+        p.classList.add('vsp-uni4-pill-active');
+        onChange(getFilterState(bar));
+      });
+    });
+    if (csvBtn && filters.onCSV) csvBtn.addEventListener('click', filters.onCSV);
+    return bar;
+  }
+  function renderPillGroup(groups) {
+    return groups.map(g => '<div style="display:flex;gap:4px;background:var(--bg1,#111);padding:3px;border-radius:4px">'
+      + g.options.map((o, i) => `<button class="vsp-uni4-pill ${i === 0 ? 'vsp-uni4-pill-active' : ''}" data-group="${esc(g.key)}" data-value="${esc(o.value || '')}" style="${o.color ? 'color:' + o.color : ''}">${esc(o.label)}</button>`).join('')
+      + '</div>').join('');
+  }
+  function getFilterState(bar) {
+    const state = { q: '' };
+    const q = bar.querySelector('.vsp-uni4-q');
+    if (q) state.q = (q.value || '').toLowerCase();
+    bar.querySelectorAll('.vsp-uni4-pill-active').forEach(p => state[p.dataset.group] = p.dataset.value || '');
+    return state;
+  }
+  function tableToCSV(table) {
+    if (!table) return '';
+    const rows = [];
+    table.querySelectorAll('thead tr').forEach(tr => rows.push(Array.from(tr.querySelectorAll('th,td')).map(c => '"' + (c.textContent || '').trim().replace(/"/g, '""').replace(/\s+/g, ' ') + '"').join(',')));
+    table.querySelectorAll('tbody tr').forEach(tr => { if (tr.style.display === 'none') return; rows.push(Array.from(tr.querySelectorAll('td')).map(c => '"' + (c.textContent || '').trim().replace(/"/g, '""').replace(/\s+/g, ' ') + '"').join(',')); });
+    return rows.join('\n');
+  }
+  function applyFilters(state) {
+    $$('table').forEach(tbl => {
+      const rows = tbl.querySelectorAll('tbody tr');
+      let shown = 0;
+      rows.forEach(tr => {
+        const text = (tr.textContent || '').toLowerCase();
+        let ok = true;
+        if (state.q && text.indexOf(state.q) < 0) ok = false;
+        for (const k of Object.keys(state)) {
+          if (k === 'q' || !state[k]) continue;
+          if (text.indexOf(state[k].toLowerCase()) < 0) ok = false;
+        }
+        tr.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+      });
+      const card = tbl.closest('div[class*="card"]') || tbl.parentNode;
+      const counter = card && card.querySelector('.vsp-uni4-count');
+      if (counter) counter.textContent = shown + ' / ' + rows.length + ' rows';
+    });
+  }
+  function infoBanner(color, title, html) {
+    return `<div style="background:rgba(${parseInt(color.slice(1,3),16)},${parseInt(color.slice(3,5),16)},${parseInt(color.slice(5,7),16)},.08);border-left:3px solid ${color};padding:10px 14px;border-radius:0 4px 4px 0;font-size:11px;line-height:1.5;margin-bottom:14px"><b style="color:${color}">${esc(title)}</b> ${html}</div>`;
+  }
+  function injectBanner(id, html) {
+    const main = $('main') || $('.main') || document.body;
+    if (!main || $id(id)) return;
+    const banner = document.createElement('div');
+    banner.id = id;
+    banner.innerHTML = html;
+    const target = main.querySelector('div');
+    if (target) target.parentNode.insertBefore(banner, target);
+  }
+
+  // ─── PANEL: users ────────────────────────────────────────────────────────
+  function initUsers() {
+    setTimeout(() => {
+      injectBanner('vsp-users-banner', infoBanner('#3b82f6', '👥 User Management',
+        'Role-based access control (RBAC). Roles: <b>admin</b> (full access) / <b>analyst</b> (read + investigate) / <b>operator</b> (run scans) / <b>viewer</b> (read-only). Sessions tracked in audit_log per <b>NIST SP 800-53 AC-2</b>.'));
+
+      $$('table').forEach(tbl => {
+        const card = tbl.closest('div[class*="card"]') || tbl.parentNode;
+        if (!card || card.querySelector('.vsp-uni4-filter')) return;
+        injectFilterBar(card, {
+          searchPlaceholder: 'Search email / role…',
+          pills: [{
+            key: 'role',
+            options: [
+              { label: 'All roles', value: '' },
+              { label: 'Admin', value: 'admin', color: '#dc2626' },
+              { label: 'Analyst', value: 'analyst', color: '#3b82f6' },
+              { label: 'Operator', value: 'operator', color: '#a855f7' },
+              { label: 'Viewer', value: 'viewer', color: '#71717a' }
+            ]
+          }],
+          onCSV: () => {
+            downloadFile('users-' + Date.now() + '.csv', tableToCSV(tbl), 'text/csv');
+            toast('Exported users CSV', 'success');
+          }
+        }, applyFilters);
+
+        // Click row → User Detail
+        if (!tbl.dataset.vspClick) {
+          tbl.dataset.vspClick = '1';
+          tbl.addEventListener('click', e => {
+            const tr = e.target.closest('tbody tr');
+            if (!tr) return;
+            const cells = Array.from(tr.querySelectorAll('td')).map(c => (c.textContent || '').trim());
+            if (cells.length < 2) return;
+            const body = '<div style="background:var(--bg1,#111);border-radius:6px;padding:8px 14px">'
+              + cells.map((c, i) => row('Field ' + (i+1), c, true)).join('')
+              + '</div>';
+            showModal({
+              title: '👤 User Detail',
+              body: body,
+              footer: '<button class="btn btn-primary btn-sm" onclick="window._vspUNI4.close()">Close</button>',
+              width: '600px'
+            });
+          });
+        }
+      });
+    }, 600);
+  }
+
+  // ─── PANEL: settings ─────────────────────────────────────────────────────
+  function initSettings() {
+    setTimeout(() => {
+      injectBanner('vsp-settings-banner', infoBanner('#a855f7', '⚙ System Settings',
+        'Configure DAST targets, scan profiles, software inventory, retention policies. Changes audited per <b>NIST SP 800-53 CM-3</b> Configuration Change Control.'));
+
+      // Mark sections with hint banners
+      $$('h2, h3, [class*="section"]').forEach(h => {
+        if (h.dataset.vspHint) return;
+        const text = (h.textContent || '').toLowerCase();
+        let hint = null;
+        if (/dast/i.test(text)) {
+          hint = { color: '#ef4444', title: '🎯 DAST Targets', desc: 'Dynamic Application Security Testing — runtime web app vulnerability scanning. Per <b>OWASP ASVS</b>.' };
+        } else if (/scan/i.test(text)) {
+          hint = { color: '#f59e0b', title: '🔍 Scan Configuration', desc: 'SAST/SCA/IaC scan profiles: <b>FAST</b> (10-min) / <b>STANDARD</b> (30-min) / <b>DEEP</b> (full).' };
+        } else if (/inventory/i.test(text) || /software/i.test(text)) {
+          hint = { color: '#3b82f6', title: '📦 Software Inventory', desc: 'Software Bill of Materials (SBOM) tracking per <b>EO 14028</b>. Auto-generated reports.' };
+        }
+        if (hint) {
+          h.dataset.vspHint = '1';
+          const banner = document.createElement('div');
+          banner.innerHTML = infoBanner(hint.color, hint.title, hint.desc);
+          h.parentNode.insertBefore(banner, h.nextSibling);
+        }
+      });
+    }, 600);
+  }
+
+  // ─── PANEL: integrations ─────────────────────────────────────────────────
+  async function loadIntegrationsStatus() {
+    try {
+      var tk = window.TOKEN || '';
+      var r = await fetch('/api/v1/integrations', {
+        headers: {'Authorization': 'Bearer ' + tk}
+      });
+      if (!r.ok) return;
+      var d = await r.json();
+      var intList = d.integrations || [];
+      // Group by type
+      var byType = {};
+      intList.forEach(function(i) {
+        if (!byType[i.type]) byType[i.type] = [];
+        byType[i.type].push(i);
+      });
+      // Update status indicators per integration type
+      var typeMap = {
+        slack: 'slack-status',
+        smtp: 'smtp-status',
+        teams: 'teams-status',
+        pagerduty: 'pd-status',
+        webhook: 'wh-status',
+        jira: 'jira-status',
+        github: 'github-status',
+        gitlab: 'gitlab-status',
+      };
+      // Populate GitLab fields from loaded config
+      var glItems = byType['gitlab'] || [];
+      if (glItems.length > 0) {
+        var gl = glItems[0];
+        var glUrl = document.getElementById('gl-url');
+        var glDot = document.getElementById('gitlab-dot');
+        var glPid = document.getElementById('gl-project');
+        if (glUrl && gl.url) glUrl.value = gl.url;
+        if (glPid) glPid.value = gl.project_id || '82155996';
+        if (glDot) { glDot.classList.remove('dot-off'); glDot.classList.add('dot-on'); }
+      }
+      Object.entries(typeMap).forEach(function(e) {
+        var type = e[0], elId = e[1];
+        var el = document.getElementById(elId);
+        if (!el) return;
+        var items = byType[type] || [];
+        var active = items.filter(function(i) { return i.active; });
+        if (active.length > 0) {
+          el.innerHTML = '<span style="color:var(--green)">● Connected (' + active.length + ')</span>';
+          // Populate URL field if empty
+          var urlField = document.getElementById(type + '-url') || document.getElementById(type === 'slack' ? 'slack-url' : type === 'jira' ? 'jira-url' : null);
+          if (urlField && !urlField.value && active[0].url) {
+            urlField.value = active[0].url;
+          }
+        } else {
+          el.innerHTML = '<span style="color:var(--t3)">○ Not configured</span>';
+        }
+      });
+      // Show count in banner
+      var total = intList.filter(function(i) { return i.active; }).length;
+      var countEl = document.getElementById('integ-active-count');
+      if (countEl) countEl.textContent = total + ' active';
+    } catch(e) { console.warn('loadIntegrationsStatus:', e); }
+  }
+  function initIntegrations() {
+    setTimeout(() => {
+      injectBanner('vsp-integ-banner', infoBanner('#10b981', '🔌 Integrations',
+        'Bidirectional connectors: <b>GitHub</b> (PR comments + checks), <b>Jira</b> (ticket auto-create), <b>Slack</b> (alerts), <b>Email</b> (CIRCIA reports). Test endpoints available before activation.'));
+      // Load existing integrations and populate status badges
+      loadIntegrationsStatus();
+
+      injectGenericFilter('Search integration / status…', [{
+        key: 'st',
+        options: [
+          { label: 'All', value: '' },
+          { label: 'Connected', value: 'connected', color: '#10b981' },
+          { label: 'Disconnected', value: 'disconnected', color: '#71717a' },
+          { label: 'Error', value: 'error', color: '#ef4444' }
+        ]
+      }], 'integrations');
+
+      // Auto-mark "Test" buttons with hint
+      $$('button').forEach(btn => {
+        if (btn.dataset.vspMarked) return;
+        const text = (btn.textContent || '').toLowerCase();
+        if (/test/i.test(text) && !btn.title) {
+          btn.dataset.vspMarked = '1';
+          btn.title = 'Send test request to integration endpoint';
+        }
+      });
+    }, 600);
+  }
+
+  // ─── PANEL: sso_admin ────────────────────────────────────────────────────
+  function initSSOAdmin() {
+    setTimeout(() => {
+      injectBanner('vsp-sso-banner', infoBanner('#06b6d4', '🔐 Single Sign-On (SSO)',
+        'Federated identity providers: <b>SAML 2.0</b> (Okta/Azure AD/PingFederate), <b>OIDC</b> (Google/Microsoft), <b>LDAP</b>. Per <b>NIST SP 800-63 IAL2/AAL2</b> identity assurance levels.'));
+
+      $$('table').forEach(tbl => {
+        const card = tbl.closest('div[class*="card"]') || tbl.parentNode;
+        if (!card || card.querySelector('.vsp-uni4-filter')) return;
+        injectFilterBar(card, {
+          searchPlaceholder: 'Search provider / type…',
+          pills: [{
+            key: 'type',
+            options: [
+              { label: 'All', value: '' },
+              { label: 'SAML', value: 'saml', color: '#3b82f6' },
+              { label: 'OIDC', value: 'oidc', color: '#a855f7' },
+              { label: 'LDAP', value: 'ldap', color: '#f59e0b' }
+            ]
+          }],
+          csv: false
+        }, applyFilters);
+      });
+
+      // KPI clickable
+      $$('div[class*="kpi"]').forEach(card => {
+        if (card.dataset.vspPol) return;
+        card.dataset.vspPol = '1';
+        card.style.cursor = 'pointer';
+        card.title = 'Click for SSO providers detail';
+        card.onclick = showSSOProviders;
+      });
+    }, 600);
+  }
+  async function showSSOProviders() {
+    showModal({ title: '🔐 SSO Providers', body: '<div style="padding:30px;text-align:center;color:var(--t3)">Loading…</div>', width: '600px' });
+    try {
+      const res = await authFetch('/api/v1/sso/providers').then(r => r.json()).catch(() => ({}));
+      const providers = res.providers || res.items || [];
+      const body = ''
+        + infoBanner('#06b6d4', '🔐 SSO Identity Providers', 'Per <b>NIST SP 800-63B AAL2</b>. MFA required for admin role.')
+        + '<div style="font-size:11px;color:var(--t3);margin-bottom:8px">' + providers.length + ' providers configured</div>'
+        + (providers.length > 0
+            ? '<div style="background:var(--bg1,#111);border-radius:6px;padding:10px 14px;display:grid;gap:6px">'
+              + providers.map(p => `<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd,#27272a)">
+                <span style="background:rgba(6,182,212,.15);color:#06b6d4;padding:2px 7px;border-radius:3px;font-size:10px;font-family:var(--font-mono,monospace);min-width:50px;text-align:center">${esc(p.type || '?')}</span>
+                <span style="flex:1;font-size:11px">${esc(p.name || p.id || '?')}</span>
+                <span style="font-size:10px;color:${p.enabled ? '#10b981' : '#71717a'}">${p.enabled ? '✓ enabled' : 'disabled'}</span>
+              </div>`).join('')
+              + '</div>'
+            : '<div style="background:var(--bg1,#111);border-radius:6px;padding:30px;text-align:center;color:var(--t3);font-size:11px">No SSO providers configured. Add one to enable federated login.</div>');
+      const footer = '<button class="btn btn-primary btn-sm" onclick="window._vspUNI4.close()">Close</button>';
+      showModal({ title: '🔐 SSO Providers', body: body, footer: footer, width: '600px' });
+    } catch (e) {
+      showModal({ title: 'Error', body: '<div style="color:#ef4444">' + esc(e.message) + '</div>', footer: '<button class="btn" onclick="window._vspUNI4.close()">Close</button>' });
+    }
+  }
+
+  function injectGenericFilter(searchPlaceholder, pills, csvName) {
+    $$('table').forEach(tbl => {
+      const card = tbl.closest('div[class*="card"]') || tbl.parentNode;
+      if (!card || card.querySelector('.vsp-uni4-filter')) return;
+      injectFilterBar(card, {
+        searchPlaceholder: searchPlaceholder, pills: pills,
+        onCSV: () => { downloadFile((csvName || 'export') + '-' + Date.now() + '.csv', tableToCSV(tbl), 'text/csv'); toast('Exported CSV', 'success'); }
+      }, applyFilters);
+    });
+  }
+
+  // ─── Init dispatch ───────────────────────────────────────────────────────
+  let _initDone = false;
+  function init() {
+    if (_initDone) return;
+    _initDone = true;
+    if (PANEL === 'users')             initUsers();
+    else if (PANEL === 'settings')     initSettings();
+    else if (PANEL === 'integrations') initIntegrations();
+    else if (PANEL === 'sso_admin')    initSSOAdmin();
+  }
+  if (document.readyState !== 'loading') setTimeout(init, 800);
+  else document.addEventListener('DOMContentLoaded', () => setTimeout(init, 800));
+
+  let pollCount = 0;
+  const poll = setInterval(() => { init(); if (++pollCount > 4) clearInterval(poll); }, 1500);
+})();
+
+</script>
+<!-- VSP-UNI4-POLISH-END -->
+<!-- VSP-SIEM-COMPANION -->
+
+</body>
+</html>

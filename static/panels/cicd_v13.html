@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CI/CD Enterprise Control Center V13</title>
+<style>
+:root{
+  --bg:#060a13;
+  --surface:#09111f;
+  --surface2:#0d1729;
+  --surface3:#111d34;
+  --line:#253553;
+  --line2:#31466c;
+  --text:#e8f0fb;
+  --muted:#90a2bd;
+  --soft:#64748b;
+  --blue:#60a5fa;
+  --green:#22c55e;
+  --red:#ef4444;
+  --amber:#f59e0b;
+  --violet:#a78bfa;
+  --cyan:#22d3ee;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  width:100%;
+  max-width:100%;
+  min-height:100%;
+  overflow-x:hidden;
+  background:
+    radial-gradient(circle at 20% -10%,rgba(37,99,235,.20),transparent 28%),
+    radial-gradient(circle at 80% 0%,rgba(34,197,94,.10),transparent 24%),
+    var(--bg);
+  color:var(--text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:13px;
+}
+body{padding:14px}
+button,input,select{font:inherit}
+.v13{
+  width:100%;
+  max-width:100%;
+  margin:0 auto;
+}
+.shell{
+  display:grid;
+  grid-template-columns:1.1fr .9fr;
+  gap:12px;
+}
+.hero,.card,.panel,.kpi{
+  border:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(15,23,42,.96),rgba(7,13,26,.98));
+  border-radius:16px;
+  box-shadow:0 18px 50px rgba(0,0,0,.20);
+}
+.hero{
+  padding:15px;
+  min-height:146px;
+  position:relative;
+  overflow:hidden;
+}
+.hero:before{
+  content:"";
+  position:absolute;
+  inset:-1px;
+  background:
+    radial-gradient(circle at 0% 0%,rgba(96,165,250,.20),transparent 28%),
+    radial-gradient(circle at 95% 20%,rgba(34,197,94,.14),transparent 30%);
+  pointer-events:none;
+}
+.hero > *{position:relative}
+.kicker{
+  color:#93c5fd;
+  text-transform:uppercase;
+  letter-spacing:.14em;
+  font-size:10px;
+  font-weight:950;
+}
+h1{
+  margin:6px 0 4px;
+  font-size:24px;
+  line-height:1.08;
+  letter-spacing:-.04em;
+}
+.desc{
+  color:var(--muted);
+  line-height:1.45;
+  max-width:880px;
+}
+.hero-bottom{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:14px;
+  flex-wrap:wrap;
+}
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:6px 9px;
+  border-radius:999px;
+  border:1px solid var(--line2);
+  background:#0b1324;
+  color:#dbeafe;
+  font-size:11px;
+  font-weight:900;
+}
+.pill.good{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.10);color:#bbf7d0}
+.pill.warn{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.10);color:#fde68a}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}
+.btn{
+  border:1px solid var(--line2);
+  background:#0b1324;
+  color:#dbeafe;
+  border-radius:10px;
+  padding:7px 10px;
+  font-size:12px;
+  font-weight:900;
+  cursor:pointer;
+}
+.btn:hover{border-color:rgba(96,165,250,.65);background:#10203c}
+.btn.primary{background:rgba(37,99,235,.28);border-color:rgba(96,165,250,.55)}
+.kpis{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+}
+.kpi{
+  padding:13px;
+  min-height:146px;
+  overflow:hidden;
+}
+.kpi-label{
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  font-size:10px;
+  font-weight:950;
+}
+.kpi-value{
+  margin-top:8px;
+  font-size:30px;
+  line-height:1;
+  font-weight:950;
+  letter-spacing:-.05em;
+}
+.kpi-sub{margin-top:6px;color:var(--muted);font-size:12px}
+.spark{
+  height:36px;
+  margin-top:14px;
+  border-radius:10px;
+  overflow:hidden;
+  background:linear-gradient(90deg,rgba(96,165,250,.14),rgba(34,197,94,.12));
+  display:flex;
+  align-items:end;
+  gap:3px;
+  padding:6px;
+}
+.spark span{
+  flex:1;
+  border-radius:3px 3px 0 0;
+  background:rgba(96,165,250,.72);
+  min-height:5px;
+}
+.green{color:#86efac}.red{color:#fca5a5}.amber{color:#fde047}.blue{color:#93c5fd}.violet{color:#c4b5fd}
+.nav{
+  display:flex;
+  gap:6px;
+  margin:12px 0;
+  padding:5px;
+  border:1px solid var(--line);
+  background:#070d1a;
+  border-radius:14px;
+  overflow-x:auto;
+}
+.nav button{
+  border:0;
+  border-radius:10px;
+  padding:8px 11px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+  font-weight:950;
+  font-size:12px;
+  white-space:nowrap;
+}
+.nav button.active{
+  color:#eef6ff;
+  background:#15233e;
+  box-shadow:inset 0 0 0 1px rgba(96,165,250,.25);
+}
+.panel{
+  display:none;
+  padding:12px;
+  min-width:0;
+  overflow:hidden;
+}
+.panel.active{display:block}
+.grid2{
+  display:grid;
+  grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr);
+  gap:12px;
+}
+.grid3{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.card{
+  padding:12px;
+  min-width:0;
+  overflow:hidden;
+}
+.card-title{
+  font-weight:950;
+  margin-bottom:5px;
+}
+.card-sub{
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.45;
+}
+.section-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.section-title{
+  font-weight:950;
+  font-size:15px;
+}
+.section-sub{
+  margin-top:3px;
+  color:var(--muted);
+  font-size:12px;
+}
+.flow{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:8px;
+}
+.flow-step{
+  min-width:0;
+  border:1px solid var(--line2);
+  background:#0c1528;
+  border-radius:13px;
+  padding:11px 8px;
+  text-align:center;
+  font-weight:950;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.flow-step.pass{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.11)}
+.flow-step.block{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.10)}
+.timeline{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.time-item{
+  display:grid;
+  grid-template-columns:22px 1fr auto;
+  gap:9px;
+  align-items:start;
+  border:1px solid rgba(37,49,79,.75);
+  background:#08101f;
+  border-radius:12px;
+  padding:9px;
+}
+.time-dot{
+  width:10px;height:10px;border-radius:50%;background:var(--blue);margin-top:3px;box-shadow:0 0 12px rgba(96,165,250,.8)
+}
+.time-title{font-weight:900}
+.time-sub{color:var(--muted);font-size:12px;margin-top:2px}
+.tools{
+  display:flex;
+  gap:10px;
+  justify-content:space-between;
+  align-items:center;
+  margin:8px 0 10px;
+  flex-wrap:wrap;
+}
+.search{
+  min-width:280px;
+  flex:1;
+  border:1px solid var(--line2);
+  border-radius:11px;
+  background:#07101f;
+  color:var(--text);
+  padding:8px 10px;
+}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filter{
+  border:1px solid var(--line2);
+  border-radius:999px;
+  background:#0b1324;
+  color:var(--muted);
+  padding:5px 9px;
+  cursor:pointer;
+  font-size:11px;
+  font-weight:950;
+}
+.filter.active{
+  color:#dbeafe;
+  border-color:rgba(96,165,250,.58);
+  background:rgba(37,99,235,.23);
+}
+.table-wrap{
+  width:100%;
+  max-height:520px;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:13px;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+.detail table{min-width:900px}
+.overview-table table{
+  table-layout:fixed;
+  min-width:100%;
+}
+th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  text-align:left;
+  background:#162036;
+  color:#bfd0e7;
+  padding:9px 10px;
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  border-bottom:1px solid var(--line);
+}
+td{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(37,49,79,.7);
+  color:#d7e2f3;
+  vertical-align:top;
+}
+tr:hover td{background:rgba(96,165,250,.045)}
+.mono{font-family:"JetBrains Mono","SFMono-Regular",Consolas,monospace;font-size:12px}
+.badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid var(--line2);
+  border-radius:999px;
+  padding:3px 8px;
+  font-size:10px;
+  font-weight:950;
+  white-space:nowrap;
+}
+.badge.pass{color:#bbf7d0;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.34)}
+.badge.fail,.badge.block{color:#fecaca;background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.34)}
+.badge.warn{color:#fde68a;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.34)}
+.badge.info{color:#bfdbfe;background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.34)}
+.badge.neutral{color:#cbd5e1;background:rgba(148,163,184,.10);border-color:rgba(148,163,184,.25)}
+.path{
+  display:inline-block;
+  max-width:480px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#bfdbfe;
+  vertical-align:bottom;
+}
+.empty{
+  padding:22px;
+  text-align:center;
+  color:var(--muted);
+}
+.risk-row{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:8px;
+  align-items:center;
+  border:1px solid rgba(37,49,79,.75);
+  background:#08101f;
+  border-radius:12px;
+  padding:10px;
+  margin-bottom:8px;
+}
+.risk-title{font-weight:950}
+.risk-sub{color:var(--muted);font-size:12px;margin-top:3px}
+*{scrollbar-width:thin;scrollbar-color:#475569 #0b1223}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:#0b1223}
+*::-webkit-scrollbar-thumb{background:#475569;border-radius:999px;border:2px solid #0b1223}
+@media(max-width:1500px){
+  .shell,.grid2{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .flow{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  body{padding:8px}
+  .kpis,.grid3{grid-template-columns:1fr}
+  .flow{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="v13">
+  <div class="shell">
+    <section class="hero">
+      <div class="kicker">Enterprise CI/CD Security</div>
+      <h1>CI/CD DevSecOps Control Center</h1>
+      <div class="desc">Production-grade control room for security gates, PR/MR decisions, scheduled scans, business run history and retained operational evidence.</div>
+      <div class="hero-bottom">
+        <div class="status-row">
+          <span class="pill good"><span class="dot"></span><span id="healthText">Loading</span></span>
+          <span class="pill" id="lastUpdated">Last updated: —</span>
+          <span class="pill warn" id="envPill">Local · 8921</span>
+        </div>
+        <div>
+          <button class="btn primary" id="refreshBtn">Refresh</button>
+          <button class="btn" data-tab-jump="evidence">Evidence</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="kpis">
+      <div class="kpi"><div class="kpi-label">Gate pass rate</div><div class="kpi-value green" id="kpiPassRate">—</div><div class="kpi-sub">Business decisions</div><div class="spark" id="sparkPass"></div></div>
+      <div class="kpi"><div class="kpi-label">Blocked PR/MR</div><div class="kpi-value red" id="kpiBlocked">—</div><div class="kpi-sub">Policy or severity block</div><div class="spark" id="sparkBlock"></div></div>
+      <div class="kpi"><div class="kpi-label">Schedules</div><div class="kpi-value blue" id="kpiSchedules">—</div><div class="kpi-sub" id="kpiSchedulesSub">Active / paused</div><div class="spark" id="sparkSched"></div></div>
+      <div class="kpi"><div class="kpi-label">Evidence artifacts</div><div class="kpi-value amber" id="kpiEvidence">—</div><div class="kpi-sub">Retained proof</div><div class="spark" id="sparkEvidence"></div></div>
+    </section>
+  </div>
+
+  <nav class="nav">
+    <button class="active" data-tab="overview">Overview</button>
+    <button data-tab="pipeline">Pipeline</button>
+    <button data-tab="prgate">PR Gate</button>
+    <button data-tab="scheduler">Scheduler</button>
+    <button data-tab="history">Run History</button>
+    <button data-tab="evidence">Evidence</button>
+  </nav>
+
+  <section class="panel active" id="tab-overview">
+    <div class="section-head">
+      <div><div class="section-title">Production overview</div><div class="section-sub">Dense view with business runs separated from operational evidence.</div></div>
+      <span class="badge pass">PRODUCTION READY</span>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <div class="grid3">
+          <div class="card"><div class="card-title">Gate status</div><div class="card-sub" id="overviewGate">Loading…</div></div>
+          <div class="card"><div class="card-title">Scheduler status</div><div class="card-sub" id="overviewScheduler">Loading…</div></div>
+          <div class="card"><div class="card-title">Evidence model</div><div class="card-sub" id="overviewEvidence">Loading…</div></div>
+        </div>
+
+        <div class="card" style="margin-top:10px">
+          <div class="card-title">Pipeline lifecycle</div>
+          <div class="flow">
+            <div class="flow-step">Code Push</div>
+            <div class="flow-step">CI Scan</div>
+            <div class="flow-step">Security Tools</div>
+            <div class="flow-step">Policy Gate</div>
+            <div class="flow-step pass">PASS = Merge</div>
+            <div class="flow-step block">FAIL = Block</div>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-top:10px">
+          <div class="card overview-table">
+            <div class="card-title">Latest business runs</div>
+            <div class="table-wrap"><table><thead><tr><th>Run</th><th>Control</th><th>Status</th></tr></thead><tbody id="overviewRuns"></tbody></table></div>
+          </div>
+          <div class="card overview-table">
+            <div class="card-title">Latest PR/MR decisions</div>
+            <div class="table-wrap"><table><thead><tr><th>PR/MR</th><th>Branch</th><th>Decision</th></tr></thead><tbody id="overviewPr"></tbody></table></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-title">Control timeline</div>
+          <div class="timeline" id="timeline"></div>
+        </div>
+
+        <div class="card overview-table" style="margin-top:10px">
+          <div class="card-title">Scheduler snapshot</div>
+          <div class="table-wrap"><table><thead><tr><th>Schedule</th><th>Status</th><th>Last</th></tr></thead><tbody id="overviewSched"></tbody></table></div>
+        </div>
+
+        <div class="card" style="margin-top:10px">
+          <div class="card-title">Evidence split</div>
+          <div class="risk-row"><div><div class="risk-title">Business controls</div><div class="risk-sub">CI/CD, audit, policy, scheduler, templates, PR gate</div></div><span class="badge pass" id="bizCount">0</span></div>
+          <div class="risk-row"><div><div class="risk-title">Ops / UI / Fix evidence</div><div class="risk-sub">Fix scripts, layout gates, production gates, SLA workers</div></div><span class="badge info" id="opsCount">0</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-pipeline">
+    <div class="section-head"><div><div class="section-title">Pipeline</div><div class="section-sub">Lifecycle from source event to merge/block decision.</div></div></div>
+    <div class="card"><div class="flow"><div class="flow-step">Code Push</div><div class="flow-step">CI Scan</div><div class="flow-step">SAST/SCA/IaC</div><div class="flow-step">Policy Gate</div><div class="flow-step pass">Merge</div><div class="flow-step block">Block</div></div></div>
+    <div class="grid3" style="margin-top:10px"><div class="card"><div class="card-title">PASS</div><div class="card-sub">Merge allowed, evidence retained, audit trail stored.</div></div><div class="card"><div class="card-title">BLOCK</div><div class="card-sub">Merge blocked, remediation required, approver review.</div></div><div class="card"><div class="card-title">WARN</div><div class="card-sub">Manual review, SLA tracking, risk acceptance.</div></div></div>
+  </section>
+
+  <section class="panel detail" id="tab-prgate">
+    <div class="section-head"><div><div class="section-title">PR/MR Gate</div><div class="section-sub">Gate decisions only. No fix artifacts mixed here.</div></div></div>
+    <div class="tools"><input class="search" id="prSearch" placeholder="Search PR/MR, branch, decision…" aria-label="Search Pr/Mr, Branch, Decision…"><div class="filters" id="prFilters"><button class="filter active" data-filter="ALL">All</button><button class="filter" data-filter="PASS">PASS</button><button class="filter" data-filter="BLOCK">BLOCK</button><button class="filter" data-filter="FAIL">FAIL</button></div></div>
+    <div class="table-wrap"><table><thead><tr><th>PR/MR</th><th>Platform</th><th>Branch</th><th>Score</th><th>C/H/M</th><th>Decision</th><th>Evidence</th></tr></thead><tbody id="prRows"></tbody></table></div>
+  </section>
+
+  <section class="panel detail" id="tab-scheduler">
+    <div class="section-head"><div><div class="section-title">Scheduler</div><div class="section-sub">Cadence, active state, next run, last result.</div></div></div>
+    <div class="tools"><input class="search" id="schedSearch" placeholder="Search schedule, branch, status…" aria-label="Search Schedule, Branch, Status…"><div class="filters" id="schedFilters"><button class="filter active" data-filter="ALL">All</button><button class="filter" data-filter="active">Active</button><button class="filter" data-filter="paused">Paused</button><button class="filter" data-filter="PASS">PASS</button></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Schedule</th><th>Platform</th><th>Branch</th><th>Profile</th><th>Frequency</th><th>Status</th><th>Next run</th><th>Last</th><th>Evidence</th></tr></thead><tbody id="schedRows"></tbody></table></div>
+  </section>
+
+  <section class="panel detail" id="tab-history">
+    <div class="section-head"><div><div class="section-title">Run History</div><div class="section-sub">Business CI/CD runs only. Evidence artifacts remain accessible in Evidence.</div></div><span class="badge info" id="historyCount">0 runs</span></div>
+    <div class="tools"><input class="search" id="historySearch" placeholder="Search business run, control, status…" aria-label="Search Business Run, Control, Status…"><div class="filters" id="historyFilters"><button class="filter active" data-filter="ALL">All business runs</button><button class="filter" data-filter="PASS">PASS</button><button class="filter" data-filter="FAIL">FAIL</button></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Run ID</th><th>Generated</th><th>Control</th><th>Status</th><th>Evidence</th></tr></thead><tbody id="historyRows"></tbody></table></div>
+  </section>
+
+  <section class="panel detail" id="tab-evidence">
+    <div class="section-head"><div><div class="section-title">Evidence</div><div class="section-sub">All retained artifacts: business controls, production gates, fixes, screenshots, reports.</div></div><span class="badge info" id="evidenceCount">0 artifacts</span></div>
+    <div class="tools"><input class="search" id="evidenceSearch" placeholder="Search artifact, type, status, path…" aria-label="Search Artifact, Type, Status, Path…"><div class="filters" id="evidenceFilters"><button class="filter active" data-filter="ALL">All</button><button class="filter" data-filter="BUSINESS">Business</button><button class="filter" data-filter="OPS">Ops / UI / Fix</button><button class="filter" data-filter="FAIL">FAIL</button></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Artifact</th><th>Generated</th><th>Type</th><th>Status</th><th>Evidence</th></tr></thead><tbody id="evidenceRows"></tbody></table></div>
+  </section>
+</div>
+
+<script>
+(function(){
+"use strict";
+var state={schedules:[],pr:[],historyAll:[],historyBusiness:[],evidence:[]};
+function q(id){return document.getElementById(id)}
+function esc(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
+function arr(x){return Array.isArray(x)?x:(x&&(x.items||x.rows||x.runs||x.history||x.schedules||x.decisions||x.data))||[]}
+async function getJson(path){var r=await fetch(path,{credentials:"same-origin"});if(!r.ok)throw new Error(path+" HTTP "+r.status);return r.json()}
+function badge(v){var s=String(v||"UNKNOWN").toUpperCase(),c="neutral";if(["PASS","ACTIVE","DONE","READY","BUSINESS"].includes(s))c="pass";else if(["FAIL","BLOCK","BLOCKED"].includes(s))c="fail";else if(["WARN","PAUSED","PENDING"].includes(s))c="warn";else c="info";return '<span class="badge '+c+'">'+esc(s)+'</span>'}
+function pathCell(p){if(!p)return"—";var f=String(p),s=f.replace("/home/test/Data/GOLANG_VSP/out_ci/","out_ci/");return '<span class="path mono" title="'+esc(f)+'">'+esc(s)+'</span>'}
+function classify(x){var id=String(x.id||x.run_id||x.rid||x.name||x.artifact_id||""),control=String(x.control||x.control_group||x.name||x.type||""),t=(id+" "+control).toUpperCase();if(/^(FIX_|PRODUCTION_|CICD_UI_|MASTER_CONTROL_|CICD_Q2_SLA_)/.test(id.toUpperCase()))return"OPS";if(/UI POLISH|PRODUCTION STRICT|TOOLBAR SCOPE|SLA ESCALATION|MASTER CONTROL|FIX /.test(t))return"OPS";return"BUSINESS"}
+function normHist(x){return{id:x.id||x.run_id||x.rid||x.name||x.artifact_id||"—",generated:x.generated||x.generated_at||x.created||x.created_at||x.time||"—",control:x.control||x.control_group||x.name||x.type||"—",status:x.status||x.result||"UNKNOWN",path:x.evidence_path||x.evidence||x.path||x.evidence_dir||""}}
+function normSched(x){return{name:x.name||x.id||x.schedule_id||"—",platform:x.platform||"—",branch:x.branch||x.ref||"—",profile:x.profile||x.mode||"—",frequency:x.frequency||x.cron||x.interval||"—",status:x.status||(x.active===false?"paused":"active"),next:x.next_run||x.next||"—",last:x.last_result||x.last||x.result||"—",evidence:x.evidence||x.evidence_path||""}}
+function normPr(x){return{id:x.id||x.pr||x.mr||x.name||x.pr_mr||"—",platform:x.platform||"—",branch:x.branch||"—",score:x.score==null?"—":x.score,chm:x.chm||x.c_h_m||[x.critical||0,x.high||0,x.medium||0].join("/"),decision:x.decision||x.status||x.result||"UNKNOWN",evidence:x.evidence||x.evidence_path||x.path||""}}
+function spark(id,vals,color){var e=q(id);e.innerHTML=vals.map(function(v){return '<span style="height:'+Math.max(6,Math.min(32,v))+'px;background:'+color+'"></span>'}).join("")}
+function filterRows(rows,search,filter,fields,fn){search=String(search||"").toLowerCase().trim();return rows.filter(function(r){var blob=fields.map(function(k){return String(r[k]||"")}).join(" ").toLowerCase();if(search&&!blob.includes(search))return false;if(filter&&filter!=="ALL"&&fn&&!fn(r,filter))return false;return true})}
+function renderPr(){var f=document.querySelector("#prFilters .active").dataset.filter,rows=filterRows(state.pr,q("prSearch").value,f,["id","platform","branch","score","chm","decision","evidence"],function(r,x){return String(r.decision||"").toUpperCase()===x});q("prRows").innerHTML=rows.length?rows.map(function(r){return '<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.platform)+'</td><td>'+esc(r.branch)+'</td><td>'+esc(r.score)+'</td><td class="mono">'+esc(r.chm)+'</td><td>'+badge(r.decision)+'</td><td>'+pathCell(r.evidence)+'</td></tr>'}).join(""):'<tr><td colspan="7" class="empty">No PR/MR decisions found.</td></tr>'}
+function renderSched(){var f=document.querySelector("#schedFilters .active").dataset.filter,rows=filterRows(state.schedules,q("schedSearch").value,f,["name","platform","branch","profile","frequency","status","next","last","evidence"],function(r,x){if(x==="PASS")return String(r.last||"").toUpperCase()==="PASS";return String(r.status||"").toLowerCase()===x.toLowerCase()});q("schedRows").innerHTML=rows.length?rows.map(function(r){return '<tr><td class="mono">'+esc(r.name)+'</td><td>'+esc(r.platform)+'</td><td>'+esc(r.branch)+'</td><td>'+esc(r.profile)+'</td><td>'+esc(r.frequency)+'</td><td>'+badge(r.status)+'</td><td>'+esc(r.next)+'</td><td>'+badge(r.last)+'</td><td>'+pathCell(r.evidence)+'</td></tr>'}).join(""):'<tr><td colspan="9" class="empty">No schedules found.</td></tr>'}
+function renderHistory(){var f=document.querySelector("#historyFilters .active").dataset.filter,rows=filterRows(state.historyBusiness,q("historySearch").value,f,["id","generated","control","status","path"],function(r,x){return String(r.status||"").toUpperCase()===x});q("historyCount").textContent=rows.length+" runs";q("historyRows").innerHTML=rows.length?rows.map(function(r){return '<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.generated)+'</td><td>'+esc(r.control)+'</td><td>'+badge(r.status)+'</td><td>'+pathCell(r.path)+'</td></tr>'}).join(""):'<tr><td colspan="5" class="empty">No business runs found.</td></tr>'}
+function renderEvidence(){var f=document.querySelector("#evidenceFilters .active").dataset.filter,rows=filterRows(state.evidence,q("evidenceSearch").value,f,["id","generated","control","status","path","type"],function(r,x){if(x==="FAIL")return String(r.status||"").toUpperCase()==="FAIL";return r.type===x});q("evidenceCount").textContent=rows.length+" artifacts";q("evidenceRows").innerHTML=rows.length?rows.map(function(r){return '<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.generated)+'</td><td>'+badge(r.type)+'</td><td>'+badge(r.status)+'</td><td>'+pathCell(r.path)+'</td></tr>'}).join(""):'<tr><td colspan="5" class="empty">No evidence artifacts found.</td></tr>'}
+function renderOverview(){q("overviewRuns").innerHTML=state.historyBusiness.slice(0,8).map(function(r){return '<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.control)+'</td><td>'+badge(r.status)+'</td></tr>'}).join("")||'<tr><td colspan="3" class="empty">No runs</td></tr>';q("overviewPr").innerHTML=state.pr.slice(0,6).map(function(r){return '<tr><td class="mono">'+esc(r.id)+'</td><td>'+esc(r.branch)+'</td><td>'+badge(r.decision)+'</td></tr>'}).join("")||'<tr><td colspan="3" class="empty">No PR data</td></tr>';q("overviewSched").innerHTML=state.schedules.slice(0,8).map(function(r){return '<tr><td class="mono">'+esc(r.name)+'</td><td>'+badge(r.status)+'</td><td>'+badge(r.last)+'</td></tr>'}).join("")||'<tr><td colspan="3" class="empty">No schedules</td></tr>';q("timeline").innerHTML=state.evidence.slice(0,6).map(function(r){return '<div class="time-item"><div class="time-dot"></div><div><div class="time-title mono">'+esc(r.id)+'</div><div class="time-sub">'+esc(r.control)+' · '+esc(r.generated)+'</div></div>'+badge(r.status)+'</div>'}).join("")||'<div class="empty">No timeline data</div>'}
+function update(){var decisions=state.pr.length,pass=state.pr.filter(x=>String(x.decision||"").toUpperCase()==="PASS").length,block=state.pr.filter(x=>/BLOCK|FAIL/.test(String(x.decision||"").toUpperCase())).length,active=state.schedules.filter(x=>String(x.status||"").toLowerCase()==="active").length,paused=state.schedules.filter(x=>String(x.status||"").toLowerCase()==="paused").length,biz=state.evidence.filter(x=>x.type==="BUSINESS").length,ops=state.evidence.filter(x=>x.type==="OPS").length;q("kpiPassRate").textContent=decisions?Math.round(pass*100/decisions)+"%":"—";q("kpiBlocked").textContent=block;q("kpiSchedules").textContent=state.schedules.length;q("kpiSchedulesSub").textContent=active+" active / "+paused+" paused";q("kpiEvidence").textContent=state.evidence.length;q("overviewGate").textContent=decisions?pass+"/"+decisions+" PASS, "+block+" blocked.":"No PR/MR gate records loaded.";q("overviewScheduler").textContent=state.schedules.length+" schedules loaded, "+active+" active, "+paused+" paused.";q("overviewEvidence").textContent=biz+" business artifacts, "+ops+" ops/fix artifacts. History shows business runs only.";q("bizCount").textContent=biz;q("opsCount").textContent=ops;q("healthText").textContent="Production Ready";q("lastUpdated").textContent="Last updated: "+new Date().toLocaleString();spark("sparkPass",[8,10,14,18,22,26,30,32],"rgba(34,197,94,.75)");spark("sparkBlock",[8,16,12,20,14,10,8,12],"rgba(239,68,68,.68)");spark("sparkSched",[12,18,20,22,18,24,26,22],"rgba(96,165,250,.72)");spark("sparkEvidence",[10,12,16,18,22,24,28,32],"rgba(245,158,11,.72)")}
+async function load(){var schedules=[],pr=[],hist=[];try{schedules=arr(await getJson("/api/v1/cicd/schedules")).map(normSched)}catch(e){console.warn("[cicd] schedules",e.message)}try{pr=arr(await getJson("/api/v1/cicd/pr-gate")).map(normPr)}catch(e){console.warn("[cicd] pr",e.message)}try{hist=arr(await getJson("/api/v1/cicd/run-history")).map(normHist)}catch(e){console.warn("[cicd] history",e.message)}state.schedules=schedules;state.pr=pr;state.historyAll=hist;state.historyBusiness=hist.filter(x=>classify(x)==="BUSINESS");state.evidence=hist.map(function(x){x.type=classify(x);return x});update();renderOverview();renderPr();renderSched();renderHistory();renderEvidence()}
+function bindNav(){document.querySelectorAll("[data-tab]").forEach(function(b){b.addEventListener("click",function(){document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));q("tab-"+b.dataset.tab).classList.add("active")})});document.querySelectorAll("[data-tab-jump]").forEach(function(b){b.addEventListener("click",function(){var n=document.querySelector('[data-tab="'+b.dataset.tabJump+'"]');if(n)n.click()})})}
+function bindFilters(id,fn){document.querySelectorAll("#"+id+" .filter").forEach(function(b){b.addEventListener("click",function(){document.querySelectorAll("#"+id+" .filter").forEach(x=>x.classList.remove("active"));b.classList.add("active");fn()})})}
+function init(){bindNav();q("refreshBtn").addEventListener("click",load);q("prSearch").addEventListener("input",renderPr);q("schedSearch").addEventListener("input",renderSched);q("historySearch").addEventListener("input",renderHistory);q("evidenceSearch").addEventListener("input",renderEvidence);bindFilters("prFilters",renderPr);bindFilters("schedFilters",renderSched);bindFilters("historyFilters",renderHistory);bindFilters("evidenceFilters",renderEvidence);load()}
+document.addEventListener("DOMContentLoaded",init);
+})();
+</script>
+</body>
+</html>

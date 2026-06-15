@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+
+<script>
+/* P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD
+   Final guard rule:
+   - Auth/status/login/logout always allowed.
+   - If a real visible Dashboard shell is visible, allow protected API.
+   - If a real visible login form is visible AND Dashboard shell is not visible, block protected API.
+   - Hidden login DOM must not block authenticated Dashboard.
+*/
+(function(){
+  if (window.__P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD__) return;
+  window.__P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD__ = true;
+
+  function norm(u){
+    u = String(u || '');
+    try {
+      if (u.indexOf('http://') === 0 || u.indexOf('https://') === 0) {
+        var x = new URL(u);
+        return x.pathname + x.search;
+      }
+    } catch(e) {}
+    return u;
+  }
+
+  function pathOf(input){
+    try { return norm(typeof input === 'string' ? input : ((input && input.url) || '')); }
+    catch(e) { return ''; }
+  }
+
+  function isReallyVisible(el){
+    try {
+      if (!el) return false;
+
+      var cur = el;
+      while (cur && cur.nodeType === 1) {
+        var st = window.getComputedStyle(cur);
+        if (!st || st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) return false;
+        if (cur.hidden) return false;
+        cur = cur.parentElement;
+      }
+
+      var r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return false;
+      if (r.bottom <= 0 || r.right <= 0) return false;
+      if (r.top >= window.innerHeight || r.left >= window.innerWidth) return false;
+
+      return true;
+    } catch(e) {
+      return false;
+    }
+  }
+
+  function textOf(doc){
+    try { return ((doc.body && doc.body.innerText) || '').toLowerCase(); }
+    catch(e) { return ''; }
+  }
+
+  function visibleDashboardIn(doc){
+    try {
+      var candidates = [
+        '#panel-dashboard',
+        '[data-panel="dashboard"]',
+        '.nav-item.active',
+        '.sidebar',
+        '.app-sidebar',
+        '.topbar',
+        '.kpi',
+        '#d-score',
+        '#d-critical',
+        '#d-high',
+        '#d-medium',
+        '#d-low'
+      ];
+
+      var visibleHits = 0;
+      for (var i = 0; i < candidates.length; i++) {
+        var els = Array.prototype.slice.call(doc.querySelectorAll(candidates[i]));
+        if (els.some(isReallyVisible)) visibleHits++;
+      }
+
+      var txt = textOf(doc);
+      var textHit =
+        txt.indexOf('dashboard') >= 0 &&
+        txt.indexOf('scan log') >= 0 &&
+        txt.indexOf('findings') >= 0 &&
+        txt.indexOf('remediation') >= 0;
+
+      var adminHit = txt.indexOf('admin@vsp.local') >= 0 || txt.indexOf('unclass') >= 0;
+
+      return visibleHits >= 2 || (textHit && adminHit);
+    } catch(e) {
+      return false;
+    }
+  }
+
+  function visibleLoginIn(doc){
+    try {
+      if (visibleDashboardIn(doc)) return false;
+
+      var pwds = Array.prototype.slice.call(doc.querySelectorAll('input[type="password"]'));
+      var visiblePwd = pwds.some(isReallyVisible);
+      if (!visiblePwd) return false;
+
+      var txt = textOf(doc);
+      var hasLoginText =
+        txt.indexOf('authenticate') >= 0 ||
+        txt.indexOf('consent notice') >= 0 ||
+        txt.indexOf('u.s. government warning') >= 0 ||
+        txt.indexOf('password') >= 0;
+
+      return visiblePwd && hasLoginText;
+    } catch(e) {
+      return false;
+    }
+  }
+
+  function parentVisibleDashboard(){
+    try {
+      if (window.parent && window.parent !== window && window.parent.document) {
+        return visibleDashboardIn(window.parent.document);
+      }
+    } catch(e) {}
+    return false;
+  }
+
+  function parentVisibleLogin(){
+    try {
+      if (window.parent && window.parent !== window && window.parent.document) {
+        return visibleLoginIn(window.parent.document);
+      }
+    } catch(e) {}
+    return false;
+  }
+
+  function publicApi(path){
+    return (
+      path.indexOf('/api/v1/status') === 0 ||
+      path.indexOf('/api/v1/auth/login') === 0 ||
+      path.indexOf('/api/v1/auth/logout') === 0 ||
+      path.indexOf('/api/auth/login') === 0 ||
+      path.indexOf('/api/auth/logout') === 0 ||
+      path.indexOf('/api/login') === 0 ||
+      path.indexOf('/api/logout') === 0 ||
+      path.indexOf('/api/health') === 0 ||
+      path.indexOf('/health') === 0
+    );
+  }
+
+  function protectedApi(path){
+    return (
+      path.indexOf('/api/v1/') === 0 ||
+      path.indexOf('/api/p4/') === 0
+    ) && !publicApi(path);
+  }
+
+  function shouldBlockProtected(){
+    // IMPORTANT: dashboard wins over hidden login DOM.
+    if (visibleDashboardIn(document)) return false;
+    if (parentVisibleDashboard()) return false;
+
+    if (visibleLoginIn(document)) return true;
+    if (parentVisibleLogin()) return true;
+
+    if (document.readyState === 'loading') return true;
+
+    var p = String(location.pathname || '');
+    if (p.indexOf('/panels/') >= 0 || p.endsWith('.html')) return true;
+
+    return false;
+  }
+
+  function fake(path){
+    return new Response(JSON.stringify({
+      skipped: true,
+      reason: 'visible_login_guard',
+      url: path,
+      guard: 'P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD'
+    }), {
+      status: 200,
+      headers: {'Content-Type':'application/json'}
+    });
+  }
+
+  var nativeFetch = window.fetch;
+  if (nativeFetch && !nativeFetch.__p8921_v11) {
+    window.fetch = function(input, init){
+      var path = pathOf(input);
+      if (protectedApi(path) && shouldBlockProtected()) {
+        console.warn('[VSP-V11] block protected API while visible login is active:', path);
+        return Promise.resolve(fake(path));
+      }
+      init = init || {};
+      init.credentials = init.credentials || 'include';
+      return nativeFetch(input, init);
+    };
+    window.fetch.__p8921_v11 = true;
+  }
+
+  var NativeXHR = window.XMLHttpRequest;
+  if (NativeXHR && !window.__P8921_V11_XHR__) {
+    window.__P8921_V11_XHR__ = true;
+    window.XMLHttpRequest = function(){
+      var xhr = new NativeXHR();
+      var open = xhr.open;
+      var send = xhr.send;
+      var url = '';
+
+      xhr.open = function(method, u){
+        url = norm(u);
+        return open.apply(xhr, arguments);
+      };
+
+      xhr.send = function(){
+        if (protectedApi(url) && shouldBlockProtected()) {
+          console.warn('[VSP-V11] block XHR while visible login is active:', url);
+          var body = JSON.stringify({skipped:true, reason:'visible_login_guard', url:url});
+          try {
+            Object.defineProperty(xhr, 'readyState', {value:4, configurable:true});
+            Object.defineProperty(xhr, 'status', {value:200, configurable:true});
+            Object.defineProperty(xhr, 'responseText', {value:body, configurable:true});
+            Object.defineProperty(xhr, 'response', {value:body, configurable:true});
+            if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange();
+            if (typeof xhr.onload === 'function') xhr.onload();
+          } catch(e) {}
+          return;
+        }
+        return send.apply(xhr, arguments);
+      };
+
+      return xhr;
+    };
+  }
+
+  window.__vspAuthDebug = function(){
+    return {
+      visibleLogin: visibleLoginIn(document),
+      visibleDashboard: visibleDashboardIn(document),
+      parentVisibleLogin: parentVisibleLogin(),
+      parentVisibleDashboard: parentVisibleDashboard(),
+      shouldBlockProtected: shouldBlockProtected(),
+      readyState: document.readyState,
+      path: location.pathname,
+      guard: 'P8921_V11_FIX_GUARD_ALLOW_VISIBLE_DASHBOARD'
+    };
+  };
+})();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<style>
+/* FEAT-03 scheduler skeleton */
+.sch-shimmer{height:18px;border-radius:4px;background:linear-gradient(90deg,var(--surface) 0%,var(--border) 50%,var(--surface) 100%);background-size:200% 100%;animation:sch-shimmer 1.2s infinite}
+@keyframes sch-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+<script src="/static/js/vsp_iframe_bootstrap.js"></script>
+<script src="/static/js/vsp_uxstates.js"></script>
+<script>
+/* FEAT-29: legacy _schSetState helper removed — migrated to VSPUXState v1.0 */
+</script>
+<script>
+/* VSP auth fetch guard v2 — polling retry */
+(function(){
+  if (window.vspAuthFetch && window.vspAuthFetchVersion === 2) return;
+  window.vspAuthFetchVersion = 2;
+  
+  async function getToken(maxWait){
+    maxWait = maxWait || 2500;
+    var waited = 0;
+    var interval = 100;
+    while (waited < maxWait) {
+      // Check iframe
+      var tk = window.TOKEN || localStorage.getItem("vsp_token") || "";
+      if (tk && tk.length >= 20) return tk;
+      // Check parent (same-origin)
+      try {
+        tk = window.parent.TOKEN || window.parent.localStorage.getItem("vsp_token") || "";
+        if (tk && tk.length >= 20) {
+          window.TOKEN = tk;
+          try { localStorage.setItem("vsp_token", tk); } catch(e){}
+          return tk;
+        }
+      } catch(e) { /* cross-origin */ }
+      // Check top-level (if nested iframes)
+      try {
+        tk = window.top.TOKEN || "";
+        if (tk && tk.length >= 20) {
+          window.TOKEN = tk;
+          return tk;
+        }
+      } catch(e) {}
+      // Wait & retry
+      await new Promise(function(r){setTimeout(r, interval);});
+      waited += interval;
+    }
+    return "";
+  }
+  
+  window.vspAuthFetch = async function(url, opts){
+    opts = opts || {};
+    var tk = await getToken();
+    if (tk) {
+      opts.headers = Object.assign({}, opts.headers||{}, {"Authorization":"Bearer "+tk});
+    } else {
+      if (!/\/api\/v1\/auth\/(check|refresh|login|logout|sso\/)/.test(url)) console.warn("[VSP guard] no token after 2.5s:", url);
+    }
+    return _origFetch(url, opts);
+  };
+  
+  var _origFetch = window.fetch;
+  window.fetch = function(url, opts){
+    if (typeof url === "string" && url.indexOf("/api/") >= 0) {
+      if (opts && opts.headers && (opts.headers.Authorization || opts.headers.authorization)) {
+        return _origFetch(url, opts);
+      }
+      return window.vspAuthFetch(url, opts);
+    }
+    return _origFetch(url, opts);
+  };
+})();
+</script>
+<meta charset="UTF-8">
+<title>VSP — Scheduler</title>
+<style>
+:root{--bg:#0a0c10;--bg2:#111318;--surface:#1e2128;--border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.12);--t1:#e8eaf0;--t2:#9aa3b8;--t3:#5a6278;--t4:#3a3f52;--red:#ef4444;--red2:rgba(239,68,68,.12);--amber:#f59e0b;--amber2:rgba(245,158,11,.12);--green:#22c55e;--green2:rgba(34,197,94,.12);--blue:#3b82f6;--blue2:rgba(59,130,246,.12);--cyan:#06b6d4;--cyan2:rgba(6,182,212,.12);--purple:#8b5cf6;--purple2:rgba(139,92,246,.12);--font-mono:'JetBrains Mono','Fira Mono',monospace;--font-ui:'Inter','Segoe UI',sans-serif}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:13px}body{background:var(--bg);color:var(--t1);font-family:var(--font-ui);line-height:1.5;padding:16px}
+.pill{display:inline-block;font-size:10px;font-family:var(--font-mono);padding:2px 6px;border-radius:3px;font-weight:600;border:1px solid transparent}
+.pill-red{background:var(--red2);color:var(--red);border-color:rgba(239,68,68,.3)}.pill-amber{background:var(--amber2);color:var(--amber);border-color:rgba(245,158,11,.3)}.pill-green{background:var(--green2);color:var(--green);border-color:rgba(34,197,94,.3)}.pill-blue{background:var(--blue2);color:var(--blue);border-color:rgba(59,130,246,.3)}.pill-gray{background:rgba(255,255,255,.06);color:var(--t2);border-color:var(--border2)}.pill-cyan{background:var(--cyan2);color:var(--cyan);border-color:rgba(6,182,212,.3)}.pill-purple{background:var(--purple2);color:var(--purple);border-color:rgba(139,92,246,.3)}
+.btn{font-size:11px;font-weight:500;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--t1);cursor:pointer;transition:background .15s}.btn:hover{background:var(--surface)}.btn-sm{padding:3px 8px;font-size:10px}.btn-primary{background:var(--blue2);border-color:rgba(59,130,246,.4);color:var(--blue)}.btn-primary:hover{background:rgba(59,130,246,.2)}.btn-danger{background:var(--red2);border-color:rgba(239,68,68,.4);color:var(--red)}.btn-danger:hover{background:rgba(239,68,68,.2)}.btn-run{background:var(--green2);border-color:rgba(34,197,94,.4);color:var(--green)}.btn-run:hover{background:rgba(34,197,94,.2)}.btn:disabled{opacity:.5;cursor:not-allowed}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:12px}.card-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}.card-title{font-size:12px;font-weight:600}.card-sub{font-size:11px;color:var(--t3);margin-top:1px}.card-body{padding:12px 14px}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:11px 13px;transition:border-color .15s}.kpi:hover{border-color:var(--border2)}.kpi-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}.kpi-val{font-size:20px;font-weight:700;font-family:var(--font-mono)}.kpi-sub{font-size:10px;color:var(--t3);margin-top:2px}
+.sched-item{border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:10px;transition:all .15s;position:relative}
+.sched-item:hover{border-color:var(--border2);background:rgba(255,255,255,.01)}
+.sched-item.enabled{border-left:3px solid var(--green)}.sched-item.disabled{border-left:3px solid var(--t4);opacity:.65}
+.last-badge{font-size:10px;padding:2px 7px;border-radius:4px;margin-left:6px;font-weight:500}
+.last-pass{background:rgba(16,185,129,.15);color:var(--green)}
+.last-fail{background:rgba(239,68,68,.15);color:var(--red)}
+.last-done{background:rgba(99,102,241,.12);color:#818cf8}
+.last-never{background:var(--bg3);color:var(--t4)}
+.countdown-badge{font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,.12);color:var(--amber);margin-left:4px;font-weight:500}
+.sched-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sched-name{font-size:13px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sched-cron{font-size:10px;font-family:var(--font-mono);color:var(--cyan);background:var(--cyan2);padding:2px 7px;border-radius:4px;white-space:nowrap}
+.sched-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;font-size:11px;color:var(--t3)}
+.sched-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.toggle{width:32px;height:18px;border-radius:9px;border:none;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;outline:none}
+.toggle.on{background:var(--green)}.toggle.off{background:var(--t4)}
+.toggle::after{content:'';position:absolute;top:3px;width:12px;height:12px;border-radius:50%;background:#fff;transition:left .2s}
+.toggle.on::after{left:17px}.toggle.off::after{left:3px}
+.next-badge{font-size:10px;font-family:var(--font-mono);color:var(--amber);background:var(--amber2);padding:1px 6px;border-radius:4px}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:flex-start;justify-content:center;padding-top:32px;overflow-y:auto}.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:min(560px,95vw);margin-bottom:32px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}.modal-title{font-size:14px;font-weight:700}.modal-body{padding:14px 18px}.modal-footer{padding:10px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}.modal-close{background:none;border:none;color:var(--t3);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;transition:color .15s}.modal-close:hover{color:var(--t1)}
+.form-group{margin-bottom:10px}.form-label{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.form-label .req{color:var(--red);font-size:11px}
+.form-ctrl{width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--t1);padding:7px 10px;border-radius:6px;font-size:12px;font-family:var(--font-ui);outline:none;transition:border-color .15s}.form-ctrl:focus{border-color:var(--blue)}.form-ctrl.error{border-color:var(--red)}
+select.form-ctrl option{background:var(--bg2)}
+.cron-presets{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+.cron-preset{padding:7px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;text-align:center;font-size:11px;transition:all .15s;user-select:none}
+.cron-preset:hover,.cron-preset.active{border-color:var(--blue);background:var(--blue2);color:var(--blue)}
+.cron-preset .cp-name{font-weight:600;margin-bottom:1px}
+.cron-preset .cp-cron{font-size:9px;font-family:var(--font-mono);color:var(--t3)}
+.cron-preset.active .cp-cron{color:var(--blue)}
+.run-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;font-size:11px;transition:background .1s;cursor:pointer}.run-row:hover{background:var(--surface)}
+.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.hdr h2{font-size:15px;font-weight:700;letter-spacing:-.02em;margin-bottom:2px}
+.hdr p{font-size:11px;color:var(--t3);font-family:var(--font-mono)}
+.spinner{width:11px;height:11px;border-radius:50%;border:2px solid var(--border2);border-top-color:var(--green);animation:spin .6s linear infinite;display:inline-block;vertical-align:middle}
+.search-bar{background:var(--bg);border:1px solid var(--border2);color:var(--t1);padding:5px 10px;border-radius:6px;font-size:11px;font-family:var(--font-ui);outline:none;transition:border-color .15s;width:160px}.search-bar:focus{border-color:var(--blue)}.search-bar::placeholder{color:var(--t4)}
+.empty-state{text-align:center;padding:32px 16px;color:var(--t3)}.empty-state .emo{font-size:28px;margin-bottom:8px}.empty-state p{font-size:12px}
+.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:500;z-index:999;transform:translateY(20px);opacity:0;transition:all .25s;pointer-events:none}
+.toast.show{transform:translateY(0);opacity:1}
+.toast-success{background:var(--green2);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.toast-error{background:var(--red2);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.badge-running{animation:pulse 1.2s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@media(max-width:600px){.kpi-row{grid-template-columns:1fr 1fr}.cron-presets{grid-template-columns:1fr 1fr}.sched-hdr{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div><h2>⏱ Scan Scheduler</h2><p>Automated scan schedules · cron expressions · run history</p></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-sm" onclick="loadSchedules()">↻ Refresh</button>
+    <button class="btn btn-primary btn-sm" onclick="openNewSchedule()">+ New schedule</button>
+  </div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="kpi-lbl">Total schedules</div><div class="kpi-val" style="color:var(--cyan)" id="k-total">—</div><div class="kpi-sub">configured</div></div>
+  <div class="kpi"><div class="kpi-lbl">Active</div><div class="kpi-val" style="color:var(--green)" id="k-active">—</div><div class="kpi-sub">enabled</div></div>
+  <div class="kpi"><div class="kpi-lbl">Next run</div><div class="kpi-val" style="color:var(--amber);font-size:14px" id="k-next">—</div><div class="kpi-sub">upcoming</div></div>
+  <div class="kpi"><div class="kpi-lbl">Last run</div><div class="kpi-val" style="color:var(--t2);font-size:14px" id="k-last">—</div><div class="kpi-sub">completed</div></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div><div class="card-title">Schedules</div><div class="card-sub" id="sched-sub">—</div></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input aria-label="🔍 Search…" class="search-bar" id="sched-search" placeholder="🔍 Search…" oninput="renderSchedules()">
+      <select aria-label="Mode Filter" id="mode-filter" class="btn btn-sm" style="cursor:pointer" onchange="renderSchedules()">
+        <option value="">All modes</option>
+        <option value="SAST">SAST</option>
+        <option value="IAC">IAC</option>
+        <option value="SCA">SCA</option>
+        <option value="SECRETS">Secrets</option>
+        <option value="DAST">DAST</option>
+        <option value="FULL">Full</option>
+        <option value="FULL_SOC">FULL_SOC</option>
+      </select>
+      <select aria-label="Status Filter" id="status-filter" class="btn btn-sm" style="cursor:pointer" onchange="renderSchedules()">
+        <option value="">All status</option>
+        <option value="enabled">Enabled</option>
+        <option value="disabled">Disabled</option>
+      </select>
+    </div>
+  </div>
+  <div class="card-body" id="sched-list" style="padding:10px 12px"></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div><div class="card-title">Recent runs</div><div class="card-sub" id="runs-sub">—</div></div>
+    <button class="btn btn-sm" onclick="loadRecentRuns()">↻</button>
+  </div>
+  <div style="padding:4px 8px" id="runs-list"></div>
+</div>
+
+<!-- New / Edit schedule modal -->
+<div class="modal-overlay" id="sched-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="smod-title">New schedule</div>
+      <button class="modal-close" onclick="closeModal('sched-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Schedule name <span class="req">*</span></label>
+        <input aria-label="e.g. Daily production scan" class="form-ctrl" id="s-name" placeholder="e.g. Daily production scan" maxlength="80">
+        <div style="font-size:10px;color:var(--red);margin-top:3px;display:none" id="s-name-err">Name is required</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-group">
+          <label class="form-label" for="s-mode">Scan mode</label>
+          <select class="form-ctrl" id="s-mode" aria-label="S Mode">
+            <option value="SAST">SAST — Static analysis</option>
+            <option value="IAC">IAC — Infrastructure</option>
+            <option value="SCA">SCA — Dependencies</option>
+            <option value="SECRETS">Secrets scanning</option>
+            <option value="DAST">DAST — Dynamic application</option>
+            <option value="FULL">Full scan (all)</option>
+            <option value="FULL_SOC">FULL_SOC — Full + netcap (SOC mode)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="s-profile">Profile</label>
+          <select class="form-ctrl" id="s-profile" aria-label="S Profile">
+            <option value="FAST">FAST — Quick scan</option>
+            <option value="EXT">EXT — Extended</option>
+            <option value="AGGR">AGGR — Aggressive</option>
+            <option value="STANDARD">STANDARD</option>
+            <option value="THOROUGH">THOROUGH — Deep scan</option>
+            <option value="PREMIUM">PREMIUM — All checks</option>
+            <option value="FULL_SOC">FULL_SOC — SOC mode</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cron expression <span class="req">*</span></label>
+        <div class="cron-presets" id="cron-presets"></div>
+        <input aria-label="0 2 * * *" class="form-ctrl" id="s-cron" placeholder="0 2 * * *" style="font-family:var(--font-mono)" oninput="onCronInput()">
+        <div style="font-size:10px;color:var(--t3);margin-top:4px" id="cron-explain">Enter a cron expression or select a preset above</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Target <span style="color:var(--t4);font-size:9px;text-transform:none">(path or URL)</span></label>
+        <input aria-label="/home/test/Data/GOLANG_VSP or https://github.com/org/repo" class="form-ctrl" id="s-src" placeholder="/home/test/Data/GOLANG_VSP or https://github.com/org/repo">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tags <span style="color:var(--t4);font-size:9px;text-transform:none">(comma-separated)</span></label>
+        <input aria-label="production, nightly, critical" class="form-ctrl" id="s-tags" placeholder="production, nightly, critical">
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="cursor:pointer;display:flex;align-items:center;gap:6px">
+          <input aria-label="S Enabled" type="checkbox" id="s-enabled" checked style="accent-color:var(--green)">
+          Enable schedule immediately
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('sched-modal')">Cancel</button>
+      <button class="btn btn-primary" id="smod-save-btn" onclick="saveSchedule()">Create schedule →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Run now confirm modal -->
+<div class="modal-overlay" id="run-modal">
+  <div class="modal" style="width:min(420px,95vw)">
+    <div class="modal-head">
+      <div class="modal-title">Run schedule now</div>
+      <button class="modal-close" onclick="closeModal('run-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:12px" id="run-confirm-text"></div>
+      <div style="background:var(--surface);border-radius:7px;padding:10px 12px;font-size:11px;font-family:var(--font-mono);color:var(--cyan);line-height:1.8" id="run-confirm-detail"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('run-modal')">Cancel</button>
+      <button class="btn btn-run" id="run-confirm-btn">▶ Run now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Run detail modal -->
+<div class="modal-overlay" id="run-detail-modal">
+  <div class="modal" style="width:min(480px,95vw)">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="rdd-title">Run detail</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:2px;font-family:var(--font-mono)" id="rdd-rid"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('run-detail-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="rdd-body"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('run-detail-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────
+var TOKEN = '', API = '';
+var SCHEDULES = [], RECENT_RUNS = [];
+var _editId = null;
+
+var CRON_PRESETS = [
+  { name: 'Every hour',   cron: '0 * * * *',    desc: 'At minute 0 of every hour' },
+  { name: 'Daily 02:00',  cron: '0 2 * * *',    desc: 'Every day at 02:00 UTC' },
+  { name: 'Daily 06:00',  cron: '0 6 * * *',    desc: 'Every day at 06:00 UTC' },
+  { name: 'Twice daily',  cron: '0 2,14 * * *', desc: '02:00 and 14:00 UTC' },
+  { name: 'Weekly Mon',   cron: '0 3 * * 1',    desc: 'Monday at 03:00 UTC' },
+  { name: 'Monthly 1st',  cron: '0 4 1 * *',    desc: '1st of month at 04:00' },
+];
+
+var SAMPLE_SCHEDS = [];
+
+var SAMPLE_RUNS = [];
+
+/* FEAT-03: no mock init — start empty, loadSchedules/loadRecentRuns will populate */
+
+// ── Helpers ────────────────────────────────────────────────
+function gateBadge(g) {
+  var m = { PASS:'pill-green', WARN:'pill-amber', FAIL:'pill-red' };
+  return '<span class="pill ' + (m[g] || 'pill-gray') + '">' + (g || '—') + '</span>';
+}
+
+function modeBadge(m) {
+  var colours = { SAST:'pill-blue', IAC:'pill-cyan', SCA:'pill-purple', SECRETS:'pill-amber', FULL:'pill-gray' };
+  return '<span class="pill ' + (colours[m] || 'pill-gray') + '">' + m + '</span>';
+}
+
+function cronDescribe(c) {
+  var p = CRON_PRESETS.find(function(x){ return x.cron === c; });
+  if (p) return p.name + ' — ' + p.desc;
+  // Simple human-readable fallback for non-preset crons
+  return 'Custom: ' + c;
+}
+
+function showToast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast toast-' + (type || 'success') + ' show';
+  setTimeout(function(){ el.className = 'toast'; }, 2800);
+}
+
+// ── Render schedules ───────────────────────────────────────
+function renderSchedules() {
+  var mf = document.getElementById('mode-filter').value;
+  var sf = document.getElementById('status-filter').value;
+  var q  = (document.getElementById('sched-search').value || '').toLowerCase();
+
+  var list = SCHEDULES.filter(function(s) {
+    if (mf && s.mode !== mf) return false;
+    if (sf === 'enabled' && !s.enabled) return false;
+    if (sf === 'disabled' && s.enabled) return false;
+    if (q && s.name.toLowerCase().indexOf(q) === -1 && (s.tags||[]).join(' ').toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+
+  var enabled = SCHEDULES.filter(function(s){ return s.enabled; });
+  document.getElementById('k-total').textContent  = SCHEDULES.length;
+  document.getElementById('k-active').textContent = enabled.length;
+  var nextArr = enabled.filter(function(s){ return s.next_run && s.next_run !== '—'; });
+  document.getElementById('k-next').textContent = nextArr.length ? nextArr[0].next_run : '—';
+  document.getElementById('k-last').textContent = RECENT_RUNS.length ? RECENT_RUNS[0].ts : '—';
+  document.getElementById('sched-sub').textContent = list.length + ' of ' + SCHEDULES.length + ' schedules';
+
+  if (!list.length) {
+    document.getElementById('sched-list').innerHTML =
+      '<div class="empty-state"><div class="emo">🗓</div><p>No schedules match the current filters</p></div>';
+    return;
+  }
+
+  document.getElementById('sched-list').innerHTML = list.map(function(s) {
+    // Find original index for mutation
+    var origIdx = SCHEDULES.indexOf(s);
+    return '<div class="sched-item ' + (s.enabled ? 'enabled' : 'disabled') + '">'
+      + '<div class="sched-hdr">'
+      + '<button class="toggle ' + (s.enabled ? 'on' : 'off') + '" onclick="toggleSched(' + origIdx + ')" title="' + (s.enabled ? 'Disable' : 'Enable') + '" aria-label="' + (s.enabled ? 'Disable' : 'Enable') + '"></button>'
+      + '<span class="sched-name" title="' + s.name + '">' + s.name + '</span>'
+      + modeBadge(s.mode)
+      + '<span class="pill pill-gray">' + s.profile + '</span>'
+      + '</div>'
+      + '<div class="sched-meta">'
+      + '<span class="sched-cron">' + s.cron + '</span>'
+      + '<span>' + cronDescribe(s.cron) + '</span>'
+      + (s.enabled && s.next_run !== '—' ? '<span class="next-badge">next: ' + s.next_run + '</span>' + (s.countdown ? '<span class="countdown-badge">⏱ ' + s.countdown + '</span>' : '') : '')
+      + (s.last_run !== 'never' && s.last_run !== '—' ? '<span class="last-badge ' + (s.last_gate === 'PASS' ? 'last-pass' : s.last_gate === 'FAIL' ? 'last-fail' : 'last-done') + '">last: ' + s.last_run + (s.last_gate && s.last_gate !== '—' ? ' · ' + s.last_gate : '') + '</span>' : '<span class="last-badge last-never">never run</span>')
+      + '</div>'
+      + '<div style="font-size:10px;color:var(--t3);font-family:var(--font-mono);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + s.src + '">' + s.src + '</div>'
+      + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+      + '<span style="font-size:10px;color:var(--t3)">Last: ' + s.last_run + '</span>'
+      + gateBadge(s.last_gate)
+      + (s.tags||[]).map(function(t){ return '<span class="pill pill-gray" style="font-size:9px">' + t + '</span>'; }).join('')
+      + '</div>'
+      + '<div class="sched-actions">'
+      + '<button class="btn btn-run btn-sm" onclick="runNow(' + origIdx + ')">▶ Run now</button>'
+      + '<button class="btn btn-sm" onclick="editSchedule(' + origIdx + ')">✎ Edit</button>'
+      + '<button class="btn btn-danger btn-sm" onclick="deleteSchedule(' + origIdx + ')">✕ Delete</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+// ── Render recent runs ─────────────────────────────────────
+function renderRecentRuns() {
+  document.getElementById('runs-sub').textContent = RECENT_RUNS.length + ' recent runs';
+  if (!RECENT_RUNS.length) {
+    document.getElementById('runs-list').innerHTML = '<div class="empty-state"><div class="emo">📋</div><p>No runs yet</p></div>';
+    return;
+  }
+  document.getElementById('runs-list').innerHTML = RECENT_RUNS.map(function(r, i) {
+    var isQueued = r.status === 'QUEUED';
+    return '<div class="run-row" onclick="showRunDetail(' + i + ')" title="Click for details">'
+      + '<span style="font-family:var(--font-mono);font-size:10px;color:var(--t3);width:140px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis">' + r.rid.slice(-16) + '</span>'
+      + '<span style="flex:1;font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + r.sched + '</span>'
+      + (r.mode ? modeBadge(r.mode) : '')
+      + (isQueued
+          ? '<span class="pill pill-cyan badge-running">QUEUED</span>'
+          : gateBadge(r.gate))
+      + '<span style="font-size:10px;font-family:var(--font-mono);color:var(--t3);width:48px;text-align:right;flex-shrink:0">' + (r.findings || 0) + 'f</span>'
+      + '<span style="font-size:10px;font-family:var(--font-mono);color:var(--t3);width:44px;text-align:right;flex-shrink:0">' + r.dur + '</span>'
+      + '<span style="font-size:10px;color:var(--t3);width:100px;text-align:right;flex-shrink:0">' + r.ts + '</span>'
+      + '</div>';
+  }).join('');
+}
+
+// ── Cron presets ───────────────────────────────────────────
+function renderCronPresets() {
+  // FIX: use (p, idx) so idx is defined
+  document.getElementById('cron-presets').innerHTML = CRON_PRESETS.map(function(p, idx) {
+    return '<div class="cron-preset" data-idx="' + idx + '" onclick="selectPreset(' + idx + ')">'
+      + '<div class="cp-name">' + p.name + '</div>'
+      + '<div class="cp-cron">' + p.cron + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function selectPreset(idx) {
+  // idx is always a number here
+  if (idx < 0 || idx >= CRON_PRESETS.length) return;
+  var preset = CRON_PRESETS[idx];
+  document.getElementById('s-cron').value = preset.cron;
+  document.querySelectorAll('.cron-preset').forEach(function(el) {
+    el.classList.toggle('active', parseInt(el.dataset.idx) === idx);
+  });
+  document.getElementById('cron-explain').textContent = preset.name + ' — ' + preset.desc;
+}
+
+function selectPresetByCron(cron) {
+  var idx = CRON_PRESETS.findIndex(function(p){ return p.cron === cron; });
+  if (idx >= 0) {
+    selectPreset(idx);
+  } else {
+    document.querySelectorAll('.cron-preset').forEach(function(el){ el.classList.remove('active'); });
+    document.getElementById('cron-explain').textContent = cron ? 'Custom expression' : 'Enter a cron expression or select a preset above';
+  }
+}
+
+function onCronInput() {
+  var val = document.getElementById('s-cron').value.trim();
+  selectPresetByCron(val);
+}
+
+// ── Toggle enable/disable ──────────────────────────────────
+function toggleSched(idx) {
+  var s = SCHEDULES[idx];
+  if (!s) return;
+  s.enabled = !s.enabled;
+  if (!s.enabled) s.next_run = '—';
+  // Countdown: tính thời gian còn lại đến next_run
+  if (s.next_run_at && s.enabled) {
+    var msLeft = new Date(s.next_run_at) - new Date();
+    if (msLeft > 0) {
+      var hLeft = Math.floor(msLeft/3600000);
+      var mLeft = Math.floor((msLeft%3600000)/60000);
+      s.countdown = hLeft > 0 ? 'in ' + hLeft + 'h ' + mLeft + 'm' : 'in ' + mLeft + 'm';
+    } else {
+      s.countdown = 'overdue';
+    }
+  } else {
+    s.countdown = null;
+  }
+  renderSchedules();
+  showToast(s.name + ' ' + (s.enabled ? 'enabled' : 'disabled'), 'success');
+  if (TOKEN) {
+    fetch(API + '/api/v1/schedules/' + s.id + '/toggle', {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + TOKEN }
+    }).catch(function(){});
+  }
+}
+
+// ── Run now ────────────────────────────────────────────────
+function runNow(idx) {
+  var s = SCHEDULES[idx];
+  if (!s) return;
+  document.getElementById('run-confirm-text').textContent =
+    'This will immediately trigger a scan using the schedule configuration. The run will appear in the Runs list.';
+  document.getElementById('run-confirm-detail').innerHTML =
+    '<b>Schedule:</b> ' + s.name + '<br>'
+    + '<b>Mode:</b> ' + s.mode + ' · <b>Profile:</b> ' + s.profile + '<br>'
+    + '<b>Target:</b> ' + s.src;
+
+  var btn = document.getElementById('run-confirm-btn');
+  btn.onclick = function() {
+    closeModal('run-modal');
+    var newRun = { rid: 'RID_MANUAL_' + Date.now(), sched: s.name, status: 'QUEUED', gate: '—', findings: 0, dur: '—', ts: 'just now', mode: s.mode };
+    RECENT_RUNS.unshift(newRun);
+    /* __VSP_RECENT_RUNS_REAL_V1__ */ setTimeout(function(){try{loadRecentRuns();}catch(e){}},3000); setTimeout(function(){try{loadRecentRuns();}catch(e){}},9000);
+    renderRecentRuns();
+    showToast('Scan queued: ' + s.name, 'success');
+
+    if (TOKEN) {
+      fetch(API + '/api/v1/schedules/' + s.id + '/run', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + TOKEN }
+      }).then(function(r){ return r.json(); })
+        .then(function(d){
+          if (d && d.rid) { newRun.rid = d.rid; renderRecentRuns(); }
+        }).catch(function(){});
+    }
+  };
+  document.getElementById('run-modal').classList.add('open');
+}
+
+// ── Run detail modal ───────────────────────────────────────
+function showRunDetail(idx) {
+  var r = RECENT_RUNS[idx];
+  if (!r) return;
+  document.getElementById('rdd-title').textContent = r.sched;
+  document.getElementById('rdd-rid').textContent = r.rid;
+  var gateColor = { PASS:'var(--green)', WARN:'var(--amber)', FAIL:'var(--red)' };
+  document.getElementById('rdd-body').innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'
+    + _kpi('Status', r.status || '—', 'var(--cyan)')
+    + _kpi('Gate', r.gate || '—', gateColor[r.gate] || 'var(--t3)')
+    + _kpi('Findings', r.findings || 0, r.findings > 0 ? 'var(--red)' : 'var(--green)')
+    + _kpi('Duration', r.dur || '—', 'var(--t2)')
+    + '</div>'
+    + '<div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Run ID</div>'
+    + '<div style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);background:var(--surface);border-radius:6px;padding:8px 10px;word-break:break-all">' + r.rid + '</div>'
+    + '<div style="font-size:10px;color:var(--t3);margin-top:10px">Timestamp: ' + r.ts + (r.mode ? ' · Mode: ' + r.mode : '') + '</div>';
+  document.getElementById('run-detail-modal').classList.add('open');
+}
+function _kpi(lbl, val, color) {
+  return '<div style="background:var(--surface);border-radius:7px;padding:9px 11px">'
+    + '<div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">' + lbl + '</div>'
+    + '<div style="font-size:16px;font-weight:700;font-family:var(--font-mono);color:' + color + '">' + val + '</div>'
+    + '</div>';
+}
+
+// ── New / Edit / Save / Delete ─────────────────────────────
+function openNewSchedule() {
+  _editId = null;
+  document.getElementById('smod-title').textContent = 'New schedule';
+  document.getElementById('smod-save-btn').textContent = 'Create schedule →';
+  document.getElementById('s-name').value = '';
+  document.getElementById('s-name').classList.remove('error');
+  document.getElementById('s-name-err').style.display = 'none';
+  document.getElementById('s-mode').value = 'SAST';
+  document.getElementById('s-profile').value = 'STANDARD';
+  document.getElementById('s-cron').value = '0 2 * * *';
+  document.getElementById('s-src').value = '';
+  document.getElementById('s-tags').value = '';
+  document.getElementById('s-enabled').checked = true;
+  renderCronPresets();
+  selectPreset(1); // "Daily 02:00" is index 1
+  document.getElementById('sched-modal').classList.add('open');
+  setTimeout(function(){ document.getElementById('s-name').focus(); }, 150);
+}
+
+function editSchedule(idx) {
+  var s = SCHEDULES[idx];
+  if (!s) return;
+  _editId = s.id;
+  document.getElementById('smod-title').textContent = 'Edit: ' + s.name;
+  document.getElementById('smod-save-btn').textContent = 'Save changes →';
+  document.getElementById('s-name').value = s.name;
+  document.getElementById('s-name').classList.remove('error');
+  document.getElementById('s-name-err').style.display = 'none';
+  document.getElementById('s-mode').value = s.mode;
+  document.getElementById('s-profile').value = s.profile;
+  document.getElementById('s-cron').value = s.cron;
+  document.getElementById('s-src').value = s.src;
+  document.getElementById('s-tags').value = (s.tags || []).join(', ');
+  document.getElementById('s-enabled').checked = s.enabled;
+  renderCronPresets();
+  selectPresetByCron(s.cron);
+  document.getElementById('sched-modal').classList.add('open');
+}
+
+function saveSchedule() {
+  var name = document.getElementById('s-name').value.trim();
+  var nameEl = document.getElementById('s-name');
+  var nameErr = document.getElementById('s-name-err');
+  if (!name) {
+    nameEl.classList.add('error');
+    nameErr.style.display = 'block';
+    nameEl.focus();
+    return;
+  }
+  nameEl.classList.remove('error');
+  nameErr.style.display = 'none';
+
+  var cron = document.getElementById('s-cron').value.trim() || '0 2 * * *';
+  // __VSP_SCHED_SAVE_FIX_V1__ — PATCH/POST chuan: chi field backend nhan, giu url, enabled qua /toggle
+  var formEnabled = document.getElementById("s-enabled").checked;
+  var srcVal = document.getElementById("s-src").value.trim();
+  var s = _editId ? SCHEDULES.find(function(x){ return x.id === _editId; }) : null;
+  var _isUrl = srcVal.indexOf("://") >= 0;
+  var srvSrc = _isUrl ? (srcVal.indexOf("gitlab")>=0?"gitlab":srcVal.indexOf("github")>=0?"github":"git") : (srcVal || (s && s.src) || "github");
+  var srvUrl = _isUrl ? srcVal : ((s && s.url) || srcVal);
+  var srv = { name: name, mode: document.getElementById("s-mode").value, profile: document.getElementById("s-profile").value, cron: cron, src: srvSrc, url: srvUrl };
+  var localPatch = { name: srv.name, mode: srv.mode, profile: srv.profile, cron: srv.cron, src: srvSrc, url: srvUrl, tags: document.getElementById("s-tags").value.split(",").map(function(t){ return t.trim(); }).filter(Boolean), enabled: formEnabled };
+  if (_editId) {
+    var wasEnabled = s ? s.enabled : formEnabled;
+    if (s) Object.assign(s, localPatch);
+    showToast("Schedule updated", "success");
+    if (TOKEN) {
+      fetch(API + "/api/v1/schedules/" + _editId, { method: "PATCH", headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(srv) })
+        .then(function(r){ if (!r.ok) showToast("Save failed (HTTP " + r.status + ")", "error"); else setTimeout(loadSchedules, 600); })
+        .catch(function(){ showToast("Save failed (network)", "error"); });
+      if (formEnabled !== wasEnabled) { fetch(API + "/api/v1/schedules/" + _editId + "/toggle", { method: "POST", headers: { Authorization: "Bearer " + TOKEN } }).catch(function(){}); }
+    }
+  } else {
+    var newS = Object.assign({ id: "sc" + Date.now(), next_run: "—", last_run: "never", last_status: "—", last_gate: "—" }, localPatch);
+    SCHEDULES.unshift(newS);
+    showToast("Schedule created", "success");
+    if (TOKEN) {
+      fetch(API + "/api/v1/schedules", { method: "POST", headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(srv) })
+        .then(function(r){ if (!r.ok) showToast("Create failed (HTTP " + r.status + ")", "error"); else setTimeout(loadSchedules, 600); })
+        .catch(function(){ showToast("Create failed (network)", "error"); });
+    }
+  }
+  closeModal('sched-modal');
+  renderSchedules();
+}
+
+function deleteSchedule(idx) {
+  var s = SCHEDULES[idx]; // FIX: get id from SCHEDULES[idx], not undeclared var
+  if (!s) return;
+  if (!confirm('Delete "' + s.name + '"? This cannot be undone.')) return;
+  var id = s.id;
+  SCHEDULES = SCHEDULES.filter(function(x){ return x.id !== id; });
+  renderSchedules();
+  showToast('Schedule deleted', 'success');
+  if (TOKEN) fetch(API + '/api/v1/schedules/' + id, {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer ' + TOKEN }
+  }).catch(function(){});
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+// Close on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(function(m){ m.classList.remove('open'); });
+  }
+});
+
+// ── API loaders ────────────────────────────────────────────
+async function loadSchedules() {
+  VSPUXState.skeleton('#sched-list', { rows: 4, kind: 'card' });
+  if (!TOKEN) { VSPUXState.empty('#sched-list', 'Waiting for authentication', loadSchedules); return; }
+  try {
+    var r = await fetch(API + '/api/v1/schedules', { headers: { Authorization: 'Bearer ' + TOKEN } });
+    if (!r.ok) { VSPUXState.error('#sched-list', 'HTTP '+r.status, loadSchedules); return; }
+    var d = await r.json();
+    if (!d.schedules || !d.schedules.length) { SCHEDULES=[]; renderSchedules(); VSPUXState.empty('#sched-list', 'No schedules configured', loadSchedules); return; }
+    {
+      {
+        SCHEDULES = d.schedules.map(function(s) {
+          return {
+            id:          s.id,
+            name:        s.name,
+            mode:        s.mode,
+            profile:     s.profile,
+            cron:        s.cron,
+            src:         s.src || s.url || '—',
+            url:         s.url || '',
+            enabled:     s.enabled,
+            tags:        s.tags || [],
+            next_run:    s.next_run_at ? (function(d){ var n=new Date(d),now=new Date(),tom=new Date(now);tom.setDate(tom.getDate()+1);var hm=n.toTimeString().slice(0,5);return n.toDateString()===now.toDateString()?'today '+hm:n.toDateString()===tom.toDateString()?'tomorrow '+hm:(n.getMonth()+1)+'/'+n.getDate()+' '+hm; })(s.next_run_at) : '—',
+            last_run:    s.last_run_at ? (function(d){ var n=new Date(d),now=new Date(),tom=new Date(now);tom.setDate(tom.getDate()+1);var hm=n.toTimeString().slice(0,5);return n.toDateString()===now.toDateString()?'today '+hm:n.toDateString()===tom.toDateString()?'tomorrow '+hm:(n.getMonth()+1)+'/'+n.getDate()+' '+hm; })(s.last_run_at) : '—',
+            last_status: '—',
+            last_gate:   '—',
+          };
+        });
+        renderSchedules();
+      }
+    }
+  } catch(e) { renderSchedules(); }
+}
+
+async function loadRecentRuns() {
+  VSPUXState.skeleton('#runs-list', { rows: 5, kind: 'card' });
+  if (!TOKEN) { VSPUXState.empty('#runs-list', 'Waiting for authentication', loadRecentRuns); return; }
+  try {
+    var r = await fetch(API + '/api/v1/vsp/runs?limit=20', { headers: { Authorization: 'Bearer ' + TOKEN } });
+    if (!r.ok) { VSPUXState.error('#runs-list', 'HTTP '+r.status, loadRecentRuns); return; }
+    var d = await r.json();
+    if (!d.runs || !d.runs.length) { RECENT_RUNS=[]; renderRecentRuns(); VSPUXState.empty('#runs-list', 'No runs yet', loadRecentRuns); return; }
+    RECENT_RUNS = d.runs.map(function(r) {
+      // __VSP_RECENT_RUNS_REAL_V1__  (real duration + trigger label)
+      return { rid: r.rid||r.id,
+        sched: r.schedule_name || (String(r.rid||'').indexOf('RID_MANUAL')===0?'Manual':String(r.rid||'').indexOf('RID_SCHED')===0?'Scheduled':(r.src||'—')),
+        status: r.status, gate: r.gate||'—', findings: r.total_findings||0,
+        dur: (function(a,b){ if(!a||!b) return '—'; var ms=(new Date(b))-(new Date(a)); if(!(ms>=0)) return '—'; return ms<1000?(ms+'ms'):ms<60000?((ms/1000).toFixed(1)+'s'):(Math.floor(ms/60000)+'m'+Math.round((ms%60000)/1000)+'s'); })(r.started_at, r.finished_at),
+        ts: (r.created_at||'').slice(0,16), mode: r.mode||'' };
+    });
+    renderRecentRuns();
+  } catch(e) { VSPUXState.error('#runs-list', 'Network error', loadRecentRuns); }
+}
+
+// ── Token / theme message bus ──────────────────────────────
+function _initWithToken(tk) {
+  if (!tk || tk.length < 50 || TOKEN) return;
+  TOKEN = tk;
+  API = window.location.origin === 'null' ? '' : window.location.origin;
+  loadSchedules();
+  loadRecentRuns();
+}
+addEventListener('message', function(e) {
+  if (!window.VSPOrigin.check(e)) return;
+  if (!e.data) return;
+  if (e.data.type === 'vsp:token') _initWithToken(e.data.token);
+  if (e.data.type === 'vsp:theme') _applyTheme(e.data.theme);
+});
+
+if (window.parent !== window) {
+  window.parent.postMessage({ type: 'vsp:request_token' }, window.location.origin);
+  window.parent.postMessage({ type: 'vsp:request_theme' }, window.location.origin);
+}
+(function() {
+  var tk = '';
+  try { tk = localStorage.getItem('vsp_token') || ''; } catch(ex) {}
+  if (tk && tk.length > 50) { setTimeout(function(){ _initWithToken(tk); }, 100); return; }
+  var _p = setInterval(function() {
+    if (TOKEN) { clearInterval(_p); return; }
+    try { tk = localStorage.getItem('vsp_token') || ''; } catch(ex) {}
+    if (tk && tk.length > 50) { clearInterval(_p); _initWithToken(tk); }
+  }, 300);
+  setTimeout(function(){ clearInterval(_p); }, 5000);
+})();
+
+function _applyTheme(t) {
+  var r = document.documentElement;
+  if (t === 'light') {
+    r.style.setProperty('--bg', '#f4f5f7');
+    r.style.setProperty('--bg2', '#ffffff');
+    r.style.setProperty('--surface', '#f0f1f4');
+    r.style.setProperty('--border', 'rgba(0,0,0,.08)');
+    r.style.setProperty('--t1', '#1a1d24');
+    r.style.setProperty('--t2', '#4a5068');
+    r.style.setProperty('--t3', '#8a90a8');
+    document.body.style.background = '#f4f5f7';
+  } else {
+    r.style.setProperty('--bg', '#0a0c10');
+    r.style.setProperty('--bg2', '#111318');
+    r.style.setProperty('--surface', '#1e2128');
+    r.style.setProperty('--border', 'rgba(255,255,255,.07)');
+    r.style.setProperty('--t1', '#e8eaf0');
+    r.style.setProperty('--t2', '#9aa3b8');
+    r.style.setProperty('--t3', '#5a6278');
+    document.body.style.background = '#0a0c10';
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────
+renderSchedules();
+renderRecentRuns();
+</script>
+<script src="vsp_fe_sync_patch_v2.js?v=v19_20260526_111153"></script>
+
+<!-- VSP-UNI3-POLISH-START -->
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+ * VSP Universal Panel Polish v3 — Final batch
+ *   Inject vào: ai_advisor / ai_analyst / cicd / cmmc / samm / sbom_diff
+ *               / software_risk / scheduler / network_flow
+ * ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  if (window.__VSP_UNI_POLISH_V3__) return;
+  window.__VSP_UNI_POLISH_V3__ = true;
+
+  function $(s, ctx) { return (ctx || document).querySelector(s); }
+  function $$(s, ctx) { return Array.from((ctx || document).querySelectorAll(s)); }
+  function $id(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function pretty(o) { try { return JSON.stringify(o, null, 2); } catch (e) { return String(o); } }
+  function authFetch(url, opts) { return (window.vspAuthFetch || window.fetch)(url, opts || {}); }
+  function copy(t) { try { navigator.clipboard.writeText(t); toast('Copied', 'success'); } catch (e) {} }
+  function downloadFile(name, content, mime) {
+    const blob = new Blob([content], { type: mime || 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function relativeTime(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts); if (isNaN(d.getTime())) return '—';
+    const diff = Date.now() - d.getTime();
+    const days = Math.floor(diff / 86400000);
+    const hrs = Math.floor((diff % 86400000) / 3600000);
+    if (days > 0) return days + 'd ago';
+    if (hrs > 0) return hrs + 'h ago';
+    return Math.floor(diff / 60000) + 'm ago';
+  }
+  function fmtBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+
+  // Detect panel
+  const path = location.pathname;
+  const PANEL =
+    /ai_advisor/.test(path)    ? 'ai_advisor' :
+    /ai_analyst/.test(path)    ? 'ai_analyst' :
+    /cicd/.test(path)          ? 'cicd' :
+    /cmmc/.test(path)          ? 'cmmc' :
+    /samm/.test(path)          ? 'samm' :
+    /sbom_diff/.test(path)     ? 'sbom_diff' :
+    /software_risk/.test(path) ? 'software_risk' :
+    /scheduler/.test(path)     ? 'scheduler' :
+    /network_flow/.test(path)  ? 'network_flow' : 'unknown';
+
+  (window.VSP_DEBUG && console.log('[VSP-UNI-POLISH-V3] Loaded for panel:', PANEL));
+
+  // ─── Toast (shared) ──────────────────────────────────────────────────────
+  let tcontainer = null;
+  function ensureToastContainer() {
+    if (tcontainer) return tcontainer;
+    tcontainer = document.createElement('div');
+    tcontainer.id = 'vsp-uni3-toasts';
+    tcontainer.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none';
+    document.body.appendChild(tcontainer);
+    return tcontainer;
+  }
+  function toast(msg, type) {
+    type = type || 'info';
+    const colors = {
+      success: { bg: 'rgba(16,185,129,.15)', border: '#10b981', icon: '✓' },
+      error:   { bg: 'rgba(239,68,68,.15)',  border: '#ef4444', icon: '✗' },
+      warn:    { bg: 'rgba(245,158,11,.15)', border: '#f59e0b', icon: '⚠' },
+      info:    { bg: 'rgba(59,130,246,.15)', border: '#3b82f6', icon: 'ℹ' }
+    };
+    const c = colors[type] || colors.info;
+    const t = document.createElement('div');
+    t.style.cssText = `pointer-events:auto;background:${c.bg};border-left:3px solid ${c.border};padding:10px 14px;border-radius:6px;font-size:12px;color:var(--t1,#e5e7eb);min-width:240px;max-width:380px;box-shadow:0 4px 12px rgba(0,0,0,.4);backdrop-filter:blur(8px);animation:vspUNI3ToastIn .25s ease;display:flex;gap:10px;align-items:flex-start`;
+    t.innerHTML = `<span style="font-size:14px;color:${c.border};flex-shrink:0">${c.icon}</span><span style="flex:1;line-height:1.4">${esc(msg)}</span>`;
+    ensureToastContainer().appendChild(t);
+    setTimeout(() => {
+      t.style.transition = 'opacity .2s, transform .2s';
+      t.style.opacity = '0'; t.style.transform = 'translateX(20px)';
+      setTimeout(() => t.remove(), 250);
+    }, 3500);
+  }
+  if (!$id('vsp-uni3-toast-css')) {
+    const s = document.createElement('style'); s.id = 'vsp-uni3-toast-css';
+    s.textContent = '@keyframes vspUNI3ToastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}';
+    document.head.appendChild(s);
+  }
+  if (!window.__vspUni3OverrideAlert) {
+    window.__vspUni3OverrideAlert = true;
+    const orig = window.alert;
+    window.alert = function (msg) {
+      if (/^✅|^✓/.test(msg)) toast(String(msg).replace(/^[✅✓]\s*/, ''), 'success');
+      else if (/^❌|^✗/.test(msg)) toast(String(msg).replace(/^[❌✗]\s*/, ''), 'error');
+      else if (/error|fail/i.test(msg)) toast(msg, 'error');
+      else if (/⚠/.test(msg)) toast(String(msg).replace(/^⚠\s*/, ''), 'warn');
+      else toast(msg, 'info');
+    };
+  }
+
+  // ─── Modal ────────────────────────────────────────────────────────────────
+  function showModal(opts) {
+    closeModal();
+    const ov = document.createElement('div');
+    ov.id = 'vsp-uni3-modal-ov';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)';
+    ov.onclick = e => { if (e.target === ov) closeModal(); };
+    const box = document.createElement('div');
+    box.style.cssText = `background:var(--bg0,#0a0a0a);border:1px solid var(--bd,#27272a);border-radius:8px;max-width:${opts.width || '720px'};width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);font-size:12px;color:var(--t1,#e5e7eb)`;
+    box.innerHTML =
+      `<div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--bd,#27272a);position:sticky;top:0;background:var(--bg0,#0a0a0a);z-index:1">
+         <div style="font-size:13px;font-weight:600;flex:1">${esc(opts.title || '')}</div>
+         <button onclick="window._vspUNI3.close()" style="background:transparent;border:0;color:var(--t2,#a1a1aa);font-size:18px;cursor:pointer;padding:0 4px">×</button>
+       </div>
+       <div style="padding:18px">${opts.body || ''}</div>` +
+      (opts.footer ? `<div style="display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--bd,#27272a);background:var(--bg1,#111);position:sticky;bottom:0;justify-content:flex-end">${opts.footer}</div>` : '');
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    const escH = e => { if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', escH); } };
+    document.addEventListener('keydown', escH);
+  }
+  function closeModal() {
+    const ov = $id('vsp-uni3-modal-ov');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  }
+  function row(label, value, copyable) {
+    const v = String(value == null ? '—' : value);
+    const btn = copyable ? `<button class="btn btn-sm" style="padding:1px 6px;font-size:9px" onclick="window._vspUNI3.copy('${esc(v).replace(/'/g, '&#39;')}')">📋</button>` : '';
+    return '<div style="display:flex;gap:12px;padding:6px 0;border-bottom:1px solid var(--bd,#27272a);align-items:flex-start">'
+      + '<div style="min-width:140px;color:var(--t3);font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding-top:2px">' + esc(label) + '</div>'
+      + '<div style="flex:1;font-size:11px;line-height:1.5;word-break:break-word">' + esc(v) + '</div>'
+      + (btn ? '<div style="flex-shrink:0">' + btn + '</div>' : '')
+      + '</div>';
+  }
+
+  const UNI3 = window._vspUNI3 = { close: closeModal, copy: copy, toast: toast, showModal: showModal };
+
+  // ─── Filter bar ──────────────────────────────────────────────────────────
+  function injectFilterBar(container, filters, onChange) {
+    if (!container) return null;
+    if (container.querySelector('.vsp-uni3-filter')) return container.querySelector('.vsp-uni3-filter');
+    const bar = document.createElement('div');
+    bar.className = 'vsp-uni3-filter';
+    bar.style.cssText = 'display:flex;gap:6px;align-items:center;padding:10px 12px 0;flex-wrap:wrap;font-size:11px';
+    bar.innerHTML = ''
+      + (filters.search !== false
+          ? '<input name="search-filter" aria-label="Search filter" class="vsp-uni3-q" placeholder="' + esc(filters.searchPlaceholder || 'Search…') + '" style="font-size:11px;padding:5px 10px;flex:1;min-width:200px;background:var(--bg1,#111);border:1px solid var(--bd,#27272a);color:var(--t1,#e5e7eb);border-radius:4px">' : '')
+      + (filters.pills ? renderPillGroup(filters.pills) : '')
+      + (filters.csv !== false
+          ? '<button class="btn btn-sm vsp-uni3-csv" style="font-size:10px">↓ CSV</button>' : '')
+      + '<span class="vsp-uni3-count" style="margin-left:auto;font-size:10px;color:var(--t3)"></span>';
+    container.insertBefore(bar, container.firstChild);
+
+    if (!$id('vsp-uni3-pill-css')) {
+      const css = document.createElement('style'); css.id = 'vsp-uni3-pill-css';
+      css.textContent = '.vsp-uni3-pill{background:transparent;border:0;padding:5px 9px;font-size:10px;font-weight:500;cursor:pointer;border-radius:3px;color:var(--t2,#a1a1aa);font-family:inherit}.vsp-uni3-pill:hover{color:var(--t1,#e5e7eb)}.vsp-uni3-pill-active{background:var(--bg2,#1c1c1c);color:var(--t1,#e5e7eb)!important}';
+      document.head.appendChild(css);
+    }
+    const q = bar.querySelector('.vsp-uni3-q');
+    const csvBtn = bar.querySelector('.vsp-uni3-csv');
+    if (q) q.addEventListener('input', () => onChange(getFilterState(bar)));
+    bar.querySelectorAll('.vsp-uni3-pill').forEach(p => {
+      p.addEventListener('click', () => {
+        bar.querySelectorAll('.vsp-uni3-pill[data-group="' + p.dataset.group + '"]').forEach(x => x.classList.remove('vsp-uni3-pill-active'));
+        p.classList.add('vsp-uni3-pill-active');
+        onChange(getFilterState(bar));
+      });
+    });
+    if (csvBtn && filters.onCSV) csvBtn.addEventListener('click', filters.onCSV);
+    return bar;
+  }
+  function renderPillGroup(groups) {
+    return groups.map(g => '<div style="display:flex;gap:4px;background:var(--bg1,#111);padding:3px;border-radius:4px">'
+      + g.options.map((o, i) => `<button class="vsp-uni3-pill ${i === 0 ? 'vsp-uni3-pill-active' : ''}" data-group="${esc(g.key)}" data-value="${esc(o.value || '')}" style="${o.color ? 'color:' + o.color : ''}">${esc(o.label)}</button>`).join('')
+      + '</div>').join('');
+  }
+  function getFilterState(bar) {
+    const state = { q: '' };
+    const q = bar.querySelector('.vsp-uni3-q');
+    if (q) state.q = (q.value || '').toLowerCase();
+    bar.querySelectorAll('.vsp-uni3-pill-active').forEach(p => state[p.dataset.group] = p.dataset.value || '');
+    return state;
+  }
+  function tableToCSV(table) {
+    if (!table) return '';
+    const rows = [];
+    table.querySelectorAll('thead tr').forEach(tr => rows.push(Array.from(tr.querySelectorAll('th,td')).map(c => '"' + (c.textContent || '').trim().replace(/"/g, '""').replace(/\s+/g, ' ') + '"').join(',')));
+    table.querySelectorAll('tbody tr').forEach(tr => { if (tr.style.display === 'none') return; rows.push(Array.from(tr.querySelectorAll('td')).map(c => '"' + (c.textContent || '').trim().replace(/"/g, '""').replace(/\s+/g, ' ') + '"').join(',')); });
+    return rows.join('\n');
+  }
+  function applyFilters(state) {
+    $$('table').forEach(tbl => {
+      const rows = tbl.querySelectorAll('tbody tr');
+      let shown = 0;
+      rows.forEach(tr => {
+        const text = (tr.textContent || '').toLowerCase();
+        let ok = true;
+        if (state.q && text.indexOf(state.q) < 0) ok = false;
+        for (const k of Object.keys(state)) {
+          if (k === 'q' || !state[k]) continue;
+          if (text.indexOf(state[k].toLowerCase()) < 0) ok = false;
+        }
+        tr.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+      });
+      const card = tbl.closest('div[class*="card"]') || tbl.parentNode;
+      const counter = card && card.querySelector('.vsp-uni3-count');
+      if (counter) counter.textContent = shown + ' / ' + rows.length + ' rows';
+    });
+  }
+  function injectGenericFilter(searchPlaceholder, pills, csvName) {
+    $$('table').forEach(tbl => {
+      const card = tbl.closest('div[class*="card"]') || tbl.parentNode;
+      if (!card || card.querySelector('.vsp-uni3-filter')) return;
+      injectFilterBar(card, {
+        searchPlaceholder: searchPlaceholder, pills: pills,
+        onCSV: () => { downloadFile((csvName || 'export') + '-' + Date.now() + '.csv', tableToCSV(tbl), 'text/csv'); toast('Exported CSV', 'success'); }
+      }, applyFilters);
+    });
+  }
+  function makeKPIsClickable(handler) {
+    $$('div[class*="kpi"]').forEach(card => {
+      if (card.dataset.vspPol) return;
+      card.dataset.vspPol = '1';
+      card.style.cursor = 'pointer';
+      card.title = 'Click for breakdown';
+      card.onclick = () => handler(card);
+    });
+  }
+  function kbox(label, val, color, sub) {
+    return '<div style="background:var(--bg1,#111);border-left:3px solid ' + color + ';border-radius:4px;padding:10px 12px">'
+      + '<div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">' + esc(label) + '</div>'
+      + '<div style="font-size:22px;font-weight:600;color:' + color + ';margin-top:2px;font-family:var(--font-display)">' + (typeof val === 'number' ? val.toLocaleString() : esc(val)) + '</div>'
+      + (sub ? '<div style="font-size:10px;color:var(--t3);margin-top:2px">' + esc(sub) + '</div>' : '')
+      + '</div>';
+  }
+  function infoBanner(color, title, html) {
+    return `<div style="background:rgba(${parseInt(color.slice(1,3),16)},${parseInt(color.slice(3,5),16)},${parseInt(color.slice(5,7),16)},.08);border-left:3px solid ${color};padding:10px 14px;border-radius:0 4px 4px 0;font-size:11px;line-height:1.5;margin-bottom:14px"><b style="color:${color}">${esc(title)}</b> ${html}</div>`;
+  }
+
+  // ─── PANEL: ai_advisor ───────────────────────────────────────────────────
+  function initAIAdvisor() {
+    setTimeout(() => {
+      // Add info banner about AI Advisor
+      const main = $('main') || $('.main') || document.body;
+      if (main && !$id('vsp-ai-advisor-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'vsp-ai-advisor-banner';
+        banner.innerHTML = infoBanner('#a855f7', '🤖 AI Advisor',
+          'Provides remediation suggestions for findings. Modes: <b>online</b> (LLM API) / <b>cache</b> (cached responses) / <b>offline</b> (rules-only).');
+        const target = main.querySelector('div');
+        if (target) target.parentNode.insertBefore(banner, target);
+      }
+
+      // KPI clickable
+      makeKPIsClickable(() => showAIAdvisorStats());
+
+      // Cache stats button
+      addToolbarButton('📊 Cache stats', showAIAdvisorStats);
+    }, 600);
+  }
+  async function showAIAdvisorStats() {
+    showModal({ title: '🤖 AI Advisor — Cache Stats', body: '<div style="padding:30px;text-align:center;color:var(--t3)">Loading…</div>', width: '600px' });
+    try {
+      const stats = await authFetch('/api/v1/ai/cache/stats').then(r => r.json()).catch(() => ({}));
+      const mode = await authFetch('/api/v1/ai/mode').then(r => r.json()).catch(() => ({}));
+
+      const body = ''
+        + infoBanner('#a855f7', '🤖 AI Advisor', 'Caches LLM responses to reduce API costs. Cache key = hash(finding_id + tool + context).')
+        + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">'
+        +   kbox('CURRENT MODE', (mode.mode || 'unknown').toUpperCase(), '#a855f7')
+        +   kbox('CACHE HITS', stats.hits || stats.cache_hits || 0, '#10b981')
+        +   kbox('CACHE MISSES', stats.misses || stats.cache_misses || 0, '#f59e0b')
+        +   kbox('CACHE SIZE', stats.size || stats.entries || 0, '#3b82f6', 'entries')
+        + '</div>'
+        + '<details style="background:var(--bg1,#111);border-radius:6px;padding:10px 14px"><summary style="cursor:pointer;font-size:11px;color:var(--t2);font-weight:600">Raw stats JSON</summary>'
+        + '<pre style="font-size:10px;line-height:1.4;color:var(--t2);font-family:var(--font-mono,monospace);margin-top:8px;max-height:200px;overflow:auto">' + esc(pretty({ mode: mode, cache: stats })) + '</pre></details>';
+      const footer = '<button class="btn btn-primary btn-sm" onclick="window._vspUNI3.close()">Close</button>';
+      showModal({ title: '🤖 AI Advisor Stats', body: body, footer: footer, width: '600px' });
+    } catch (e) {
+      showModal({ title: 'Error', body: '<div style="color:#ef4444">' + esc(e.message) + '</div>', footer: '<button class="btn" onclick="window._vspUNI3.close()">Close</button>' });
+    }
+  }
+
+  // ─── PANEL: ai_analyst ───────────────────────────────────────────────────
+  function initAIAnalyst() {
+    setTimeout(() => {
+      // Add hint banner about AI Analyst
+      const main = $('main') || $('.main') || document.body;
+      if (main && !$id('vsp-ai-analyst-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'vsp-ai-analyst-banner';
+        banner.innerHTML = infoBanner('#a855f7', '💬 AI Analyst — Conversational SOC',
+          'Ask questions in natural language about: <code style="background:var(--bg2);padding:1px 4px;border-radius:2px;font-size:10px">findings</code> '
+          + '<code style="background:var(--bg2);padding:1px 4px;border-radius:2px;font-size:10px">incidents</code> '
+          + '<code style="background:var(--bg2);padding:1px 4px;border-radius:2px;font-size:10px">remediation status</code> '
+          + '<code style="background:var(--bg2);padding:1px 4px;border-radius:2px;font-size:10px">risk score</code>. Pulls real-time data from VSP database.');
+        const target = main.querySelector('div');
+        if (target) target.parentNode.insertBefore(banner, target);
+      }
+
+      // Auto-add textarea hint placeholder enhancement
+      $$('textarea, input[type="text"]').forEach(inp => {
+        if (inp.dataset.vspHint) return;
+        inp.dataset.vspHint = '1';
+        if (!inp.placeholder || inp.placeholder.length < 30) {
+          inp.placeholder = 'e.g. "Show me critical findings in the last 7 days" or "What incidents are still open?"';
+        }
+      });
+    }, 600);
+  }
+
+  // ─── PANEL: cicd ─────────────────────────────────────────────────────────
+  function initCICD() {
+    setTimeout(() => {
+      injectGenericFilter('Search pipeline / status / commit…', [{
+        key: 'st',
+        options: [
+          { label: 'All', value: '' },
+          { label: 'Success', value: 'success', color: '#10b981' },
+          { label: 'Failed', value: 'failed', color: '#ef4444' },
+          { label: 'Running', value: 'running', color: '#3b82f6' },
+          { label: 'Gate Block', value: 'block', color: '#f59e0b' }
+        ]
+      }], 'cicd-runs');
+
+      const main = $('main') || $('.main') || document.body;
+      if (main && !$id('vsp-cicd-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'vsp-cicd-banner';
+        banner.innerHTML = infoBanner('#3b82f6', '⚙ CI/CD Integration',
+          'Automated security gate per <b>NIST SP 800-218 SSDF</b>. Pipeline blocked if findings exceed thresholds (Critical=0 / High=5 / Medium=20).');
+        const target = main.querySelector('div');
+        if (target) target.parentNode.insertBefore(banner, target);
+      }
+
+      makeKPIsClickable(() => showCICDStats());
+    }, 600);
+  }
+  async function showCICDStats() {
+    showModal({ title: '⚙ CI/CD Pipeline Stats', body: '<div style="padding:30px;text-align:center;color:var(--t3)">Loading…</div>', width: '600px' });
+    try {
+      const findings = await authFetch('/api/v1/vsp/findings').then(r => r.json()).catch(() => ({}));
+      const counts = findings.severity_counts || {};
+
+      const body = ''
+        + infoBanner('#3b82f6', '⚙ Pipeline Gate', 'Per <b>NIST SP 800-218 SSDF Practice PW.7</b> — Review code for vulnerabilities + remediate before release.')
+        + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">'
+        +   kbox('CRITICAL', counts.critical || counts.CRITICAL || 0, '#dc2626', 'gate threshold: 0')
+        +   kbox('HIGH', counts.high || counts.HIGH || 0, '#ef4444', 'gate threshold: 5')
+        +   kbox('MEDIUM', counts.medium || counts.MEDIUM || 0, '#f59e0b', 'gate threshold: 20')
+        +   kbox('LOW', counts.low || counts.LOW || 0, '#3b82f6', 'no gate')
+        + '</div>';
+      const footer = '<button class="btn btn-primary btn-sm" onclick="window._vspUNI3.close()">Close</button>';
+      showModal({ title: '⚙ CI/CD Stats', body: body, footer: footer, width: '600px' });
+    } catch (e) {
+      showModal({ title: 'Error', body: '<div style="color:#ef4444">' + esc(e.message) + '</div>', footer: '<button class="btn" onclick="window._vspUNI3.close()">Close</button>' });
+    }
+  }
+
+  // ─── PANEL: cmmc ─────────────────────────────────────────────────────────
+  function initCMMC() {
+    setTimeout(() => {
+      const main = $('main') || $('.main') || document.body;
+      if (main && !$id('vsp-cmmc-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'vsp-cmmc-banner';
+        banner.innerHTML = infoBanner('#06b6d4', '🛡 CMMC 2.0 — Cybersecurity Maturity Model Certification',
+          '<b>Level 1</b> (Foundational, 17 practices) → <b>Level 2</b> (Advanced, 110 practices, NIST SP 800-171) → <b>Level 3</b> (Expert, 134 practices, NIST SP 800-172). Required for DoW contractors handling <b>CUI</b>.');
+        const target = main.querySelector('div');
+        if (target) target.parentNode.insertBefore(banner, target);
+      }
+      injectGenericFilter('Search domain / practice…', [{
+        key: 'level',
+        options: [
+          { label: 'All levels', value: '' },
+          { label: 'Level 1', value: 'level 1', color: '#10b981' },
+          { label: 'Level 2', value: 'level 2', color: '#3b82f6' },
+          { label: 'Level 3', value: 'level 3', color: '#a855f7' }
+        ]
+      }], 'cmmc');
+    }, 600);
+  }
+
+  // ─── PANEL: samm ─────────────────────────────────────────────────────────
+  function initSAMM() {
+    setTimeout(() => {
+      const main = $('main') || $('.main') || document.body;
+      if (main && !$id('vsp-samm-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'vsp-samm-banner';
+        banner.innerHTML = infoBanner('#a855f7', '📈 OWASP SAMM — Software Assurance Maturity Model',
+          '5 business functions × 3 security practices each × 3 maturity levels. Used to measure & improve software security posture. Reference: <code style="background:var(--bg2);padding:1px 4px;border-radius:2px;font-size:10px">owaspsamm.org</code>');
+        const target = main.querySelector('div');
+        if (target) target.parentNode.insertBefore(banner, target);
+      }
+      injectGenericFilter('Search practice / function…', [{
+        key: 'maturity',
+        options: [
+          { label: 'All', value: '' },
+          { label: 'Level 1', value: 'level 1', color: '#3b82f6' },
+          { label: 'Level 2', value: 'level 2', color: '#a855f7' },
+          { label: 'Level 3', value: 'level 3', color: '#10b981' }
+        ]
+      }], 'samm');
+    }, 600);
+  }
+
+  // ─── PANEL: sbom_diff ────────────────────────────────────────────────────
+  function initSBOMDiff() {
+    setTimeout(() => {
+      const main = $('main') || $('.main') || document.body;
+      if (main && !$id('vsp-sbom-diff-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'vsp-sbom-diff-banner';
+        banner.innerHTML = infoBanner('#f59e0b', '🔄 SBOM Diff — Compare Two Software Inventories',
+          'Identifies <b style="color:#10b981">added</b>, <b style="color:#ef4444">removed</b>, and <b style="color:#f59e0b">changed</b> packages between two SBOM snapshots. Helps detect supply chain drift per <b>EO 14028</b>.');
+        const target = main.querySelector('div');
+        if (target) target.parentNode.insertBefore(banner, target);
+      }
+    }, 600);
+  }
+
+  // ─── PANEL: software_risk ────────────────────────────────────────────────
+  function initSoftwareRisk() {
+    setTimeout(() => {
+      injectGenericFilter('Search package / version / vendor…', [{
+        key: 'risk',
+        options: [
+          { label: 'All risk', value: '' },
+          { label: 'Critical', value: 'critical', color: '#dc2626' },
+          { label: 'High', value: 'high', color: '#ef4444' },
+          { label: 'Medium', value: 'medium', color: '#f59e0b' },
+          { label: 'Low', value: 'low', color: '#3b82f6' },
+          { label: 'EOL', value: 'eol', color: '#71717a' }
+        ]
+      }], 'software-risk');
+
+      const main = $('main') || $('.main') || document.body;
+      if (main && !$id('vsp-sw-risk-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'vsp-sw-risk-banner';
+        banner.innerHTML = infoBanner('#ef4444', '⚠ Software Risk Assessment',
+          'Risk score = vulnerabilities × CVSS × exploitability + EOL status. EOL software = elevated risk per <b>endoflife.date</b> (74 entries in DB).');
+        const target = main.querySelector('div');
+        if (target) target.parentNode.insertBefore(banner, target);
+      }
+
+      makeKPIsClickable(() => showSoftwareRiskStats());
+    }, 600);
+  }
+  async function showSoftwareRiskStats() {
+    showModal({ title: '⚠ Software Risk Stats', body: '<div style="padding:30px;text-align:center;color:var(--t3)">Loading…</div>', width: '720px' });
+    try {
+      const stats = await authFetch('/api/v1/software-inventory/stats').then(r => r.json()).catch(() => ({}));
+      const eol = await authFetch('/api/v1/software-inventory/eol-database').then(r => r.json()).catch(() => ({}));
+
+      const eolList = eol.entries || eol.items || [];
+      const total = stats.total || stats.count || 0;
+      const eolCount = stats.eol || stats.eol_count || eolList.length || 0;
+
+      const body = ''
+        + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">'
+        +   kbox('TOTAL PACKAGES', total, '#3b82f6')
+        +   kbox('EOL ENTRIES', eolCount, '#dc2626', 'endoflife.date DB')
+        + '</div>'
+        + infoBanner('#ef4444', '⚠ EOL Risk', 'Software past end-of-life receives no security patches. Critical: replace or isolate immediately.')
+        + (eolList.length > 0 ? ''
+            + '<div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;font-weight:600">EOL DATABASE (top 10)</div>'
+            + '<div style="background:var(--bg1,#111);border-radius:6px;padding:10px 14px;display:grid;gap:4px;max-height:280px;overflow:auto">'
+            +   eolList.slice(0, 10).map(e => `<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid var(--bd,#27272a)">
+                  <span style="font-family:var(--font-mono,monospace);color:#3b82f6">${esc(e.product || e.name || '?')}</span>
+                  <span style="color:var(--t3)">EOL ${esc(e.eol_date || e.eol || '—')}</span>
+                </div>`).join('')
+            + '</div>'
+            : '');
+      const footer = '<button class="btn btn-primary btn-sm" onclick="window._vspUNI3.close()">Close</button>';
+      showModal({ title: '⚠ Software Risk', body: body, footer: footer, width: '720px' });
+    } catch (e) {
+      showModal({ title: 'Error', body: '<div style="color:#ef4444">' + esc(e.message) + '</div>', footer: '<button class="btn" onclick="window._vspUNI3.close()">Close</button>' });
+    }
+  }
+
+  // ─── PANEL: scheduler ────────────────────────────────────────────────────
+  function initScheduler() {
+    setTimeout(() => {
+      injectGenericFilter('Search schedule / target / cron…', [{
+        key: 'st',
+        options: [
+          { label: 'All', value: '' },
+          { label: 'Active', value: 'active', color: '#10b981' },
+          { label: 'Paused', value: 'paused', color: '#f59e0b' },
+          { label: 'Disabled', value: 'disabled', color: '#71717a' }
+        ]
+      }], 'schedules');
+
+      const main = $('main') || $('.main') || document.body;
+      if (main && !$id('vsp-sched-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'vsp-sched-banner';
+        banner.innerHTML = infoBanner('#3b82f6', '⏰ Scan Scheduler — Automated Continuous Monitoring',
+          'Cron-based scheduling. Tổng <b>603 runs</b> đã thực hiện. Per <b>NIST SP 800-137 ConMon</b> requirements.');
+        const target = main.querySelector('div');
+        if (target) target.parentNode.insertBefore(banner, target);
+      }
+
+      // Click rows → modal Schedule Detail
+      $$('table').forEach(tbl => {
+        if (tbl.dataset.vspClick) return;
+        tbl.dataset.vspClick = '1';
+        tbl.addEventListener('click', e => {
+          const tr = e.target.closest('tbody tr');
+          if (!tr) return;
+          const cells = Array.from(tr.querySelectorAll('td')).map(c => (c.textContent || '').trim());
+          if (cells.length < 2) return;
+          const body = '<div style="background:var(--bg1,#111);border-radius:6px;padding:8px 14px">'
+            + cells.map((c, i) => row('Field ' + (i+1), c, true)).join('')
+            + '</div>';
+          showModal({
+            title: '⏰ Schedule Detail',
+            body: body,
+            footer: '<button class="btn btn-primary btn-sm" onclick="window._vspUNI3.close()">Close</button>',
+            width: '720px'
+          });
+        });
+      });
+    }, 600);
+  }
+
+  // ─── PANEL: network_flow ─────────────────────────────────────────────────
+  function initNetworkFlow() {
+    setTimeout(() => {
+      injectGenericFilter('Search src / dst IP / port / protocol…', [{
+        key: 'proto',
+        options: [
+          { label: 'All', value: '' },
+          { label: 'TCP', value: 'tcp', color: '#3b82f6' },
+          { label: 'UDP', value: 'udp', color: '#a855f7' },
+          { label: 'ICMP', value: 'icmp', color: '#f59e0b' }
+        ]
+      }], 'network-flows');
+
+      const main = $('main') || $('.main') || document.body;
+      if (main && !$id('vsp-net-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'vsp-net-banner';
+        banner.innerHTML = infoBanner('#06b6d4', '🌐 Network Flow Analysis — NDR',
+          'NetFlow/IPFIX-style network detection & response. Detects: <b>data exfil</b>, <b>C2 beaconing</b>, <b>lateral movement</b>, <b>port scans</b>. Per <b>NIST SP 800-94</b>.');
+        const target = main.querySelector('div');
+        if (target) target.parentNode.insertBefore(banner, target);
+      }
+    }, 600);
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────
+  function addToolbarButton(label, handler) {
+    // Find header/toolbar location
+    const headers = $$('h1, h2, .header, [class*="title"]').slice(0, 1);
+    if (headers.length === 0) return;
+    const header = headers[0];
+    if (header.dataset.vspBtn) return;
+    header.dataset.vspBtn = '1';
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm';
+    btn.style.cssText = 'font-size:10px;margin-left:10px;background:var(--bg1,#111);border:1px solid var(--bd);color:var(--t1);padding:5px 10px;border-radius:4px;cursor:pointer';
+    btn.textContent = label;
+    btn.onclick = handler;
+    header.appendChild(btn);
+  }
+
+  // ─── Init dispatch ───────────────────────────────────────────────────────
+  let _initDone = false;
+  function init() {
+    if (_initDone) return;
+    _initDone = true;
+    if (PANEL === 'ai_advisor')         initAIAdvisor();
+    else if (PANEL === 'ai_analyst')    initAIAnalyst();
+    else if (PANEL === 'cicd')          initCICD();
+    else if (PANEL === 'cmmc')          initCMMC();
+    else if (PANEL === 'samm')          initSAMM();
+    else if (PANEL === 'sbom_diff')     initSBOMDiff();
+    else if (PANEL === 'software_risk') initSoftwareRisk();
+    else if (PANEL === 'scheduler')     initScheduler();
+    else if (PANEL === 'network_flow')  initNetworkFlow();
+  }
+  if (document.readyState !== 'loading') setTimeout(init, 800);
+  else document.addEventListener('DOMContentLoaded', () => setTimeout(init, 800));
+
+  let pollCount = 0;
+  const poll = setInterval(() => { init(); if (++pollCount > 4) clearInterval(poll); }, 1500);
+})();
+
+</script>
+<!-- VSP-UNI3-POLISH-END -->
+<!-- VSP-SIEM-COMPANION — Configure + Notifications buttons (per-panel) -->
+
+</body>
+</html>

@@ -1,0 +1,126 @@
+/* CICD_V13_VISUAL_POLISH_V14
+   Fixes overview readability:
+   - no text overlap in Latest business runs / PR decisions
+   - compact IDs with full title retained
+   - status column fixed width
+   - no ugly horizontal scroll in overview cards
+*/
+
+html,
+body,
+.v13 {
+  overflow-x: hidden !important;
+}
+
+#tab-overview .overview-table .table-wrap {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  max-height: 330px !important;
+}
+
+#tab-overview .overview-table table {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+}
+
+#tab-overview .overview-table th,
+#tab-overview .overview-table td {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  vertical-align: middle !important;
+  line-height: 1.25 !important;
+}
+
+/* Latest business runs: Run / Control / Status */
+#overviewRuns td:nth-child(1),
+#overviewRuns th:nth-child(1) {
+  width: 44% !important;
+}
+
+#overviewRuns td:nth-child(2),
+#overviewRuns th:nth-child(2) {
+  width: 40% !important;
+}
+
+#overviewRuns td:nth-child(3),
+#overviewRuns th:nth-child(3) {
+  width: 16% !important;
+  text-align: right !important;
+}
+
+/* Latest PR decisions: PR / Branch / Decision */
+#overviewPr td:nth-child(1),
+#overviewPr th:nth-child(1) {
+  width: 42% !important;
+}
+
+#overviewPr td:nth-child(2),
+#overviewPr th:nth-child(2) {
+  width: 42% !important;
+}
+
+#overviewPr td:nth-child(3),
+#overviewPr th:nth-child(3) {
+  width: 16% !important;
+  text-align: right !important;
+}
+
+#tab-overview .overview-table .badge {
+  min-width: 46px !important;
+  justify-content: center !important;
+  padding: 3px 7px !important;
+}
+
+.cicd-compact-id-v14 {
+  display: inline-block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  vertical-align: bottom !important;
+}
+
+.cicd-compact-control-v14 {
+  display: inline-block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  vertical-align: bottom !important;
+}
+
+/* Make overview feel less cramped while still production dense. */
+#tab-overview .grid2 {
+  gap: 12px !important;
+}
+
+#tab-overview .card-title {
+  margin-bottom: 8px !important;
+}
+
+#tab-overview td {
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+}
+
+/* Timeline remains readable. */
+#timeline .time-title {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* At medium widths, avoid two tiny overview tables side by side. */
+@media (max-width: 1450px) {
+  #tab-overview > .grid2,
+  #tab-overview .grid2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  #tab-overview .overview-table .table-wrap {
+    max-height: 280px !important;
+  }
+}

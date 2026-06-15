@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <meta charset="utf-8">
+  <title>VSP Panels Test (no auth)</title>
+  <link rel="stylesheet" href="/vsp_enterprise_ui.css">
+  <style>
+    body { background: #0d1421; color: #cbd5e1; font-family: system-ui, sans-serif; padding: 20px; }
+    :root {
+      --bg2: #162035; --bg3: #1f2937; --bg4: #2a3447;
+      --t1: #f1f5f9; --t2: #cbd5e1; --t3: #94a3b8;
+      --border: #334155; --cyan: #06b6d4; --cyan2: rgba(6,182,212,0.1);
+      --green: #10b981; --red: #ef4444; --orange: #f97316;
+      --amber: #f59e0b; --purple: #a855f7;
+      --display: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; }
+    .card-head { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .card-title { font-weight: 700; color: var(--t1); font-size: 14px; }
+    .card-sub { font-size: 11px; color: var(--t3); margin-top: 3px; }
+    .mb14 { margin-bottom: 14px; }
+    .mono-sm { font-family: var(--font-mono); font-size: 11px; }
+    .btn { background: var(--bg3); color: var(--t1); border: 1px solid var(--border); padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+    .btn-primary { background: var(--cyan); color: #fff; border-color: var(--cyan); }
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+    .form-ctrl { background: var(--bg3); color: var(--t1); border: 1px solid var(--border); padding: 6px 10px; border-radius: 3px; width: 100%; box-sizing: border-box; }
+    .form-label { font-size: 11px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px; }
+    .form-group { margin-bottom: 12px; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 9999; }
+    .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; }
+    .modal-head, .modal-footer { padding: 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-footer { border-bottom: none; border-top: 1px solid var(--border); justify-content: flex-end; gap: 8px; }
+    .modal-body { padding: 14px; }
+    .modal-title { font-weight: 700; font-size: 16px; }
+    .modal-close { background: none; border: none; color: var(--t3); font-size: 18px; cursor: pointer; }
+    .data-table th { font-weight: 600; }
+    .nav-tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+    .nav-tabs button { padding: 8px 16px; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; color: var(--t1); }
+    .nav-tabs button.active { background: var(--cyan); color: #fff; border-color: var(--cyan); }
+    [id^="panel-"] { display: none; }
+    [id^="panel-"].active { display: block; }
+  </style>
+</head>
+<body>
+  <h1 style="margin: 0 0 18px; color: var(--cyan)">VSP Panels Test — direct microservice access (no auth)</h1>
+
+  <div class="nav-tabs">
+    <button data-tab="supplychain"   class="active">Supply Chain</button>
+    <button data-tab="sw-inventory">Software Inventory</button>
+    <button data-tab="scheduler">Scheduler</button>
+    <button data-tab="email">Email</button>
+    <button data-tab="dast">DAST</button>
+  </div>
+
+  <div id="panel-supplychain"   class="active"></div>
+  <div id="panel-sw-inventory"></div>
+  <div id="panel-scheduler"></div>
+  <div id="panel-email"></div>
+  <div id="panel-dast"></div>
+
+  <script>
+    // Tab switching
+    document.querySelectorAll('.nav-tabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.remove('active'));
+        document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+    // Mock toast helper
+    window.showToast = (msg, kind) => (window.VSP_DEBUG && console.log('[toast ' + (kind || '') + ']', msg));
+  </script>
+
+  <!-- Load all 5 panels -->
+  <script src="/vsp_pro_supplychain_realapi.js"></script>
+  <script src="/vsp_sw_inventory_panel.js"></script>
+  <script src="/vsp_scheduler_panel.js"></script>
+  <script src="/vsp_email_panel.js"></script>
+  <script src="/vsp_dast_panel.js"></script>
+</body>
+</html>

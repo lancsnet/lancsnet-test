@@ -1,0 +1,8 @@
+[Unit]
+Description=VSP Scanner Watchdog every 2 min
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=120
+AccuracySec=15
+[Install]
+WantedBy=timers.target

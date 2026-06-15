@@ -1,0 +1,1 @@
+../vsp_sw_inventory_panel.js

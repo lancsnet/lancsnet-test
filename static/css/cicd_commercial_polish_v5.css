@@ -1,0 +1,155 @@
+/* CICD_COMMERCIAL_POLISH_V5 */
+:root {
+  --cicd-polish-border: rgba(96, 165, 250, .28);
+  --cicd-polish-soft: rgba(59, 130, 246, .08);
+  --cicd-polish-green: rgba(34, 197, 94, .16);
+  --cicd-polish-red: rgba(239, 68, 68, .13);
+  --cicd-polish-yellow: rgba(245, 158, 11, .16);
+}
+
+body.cicd-commercial-clean,
+body.cicd-commercial-clean * {
+  text-rendering: geometricPrecision;
+}
+
+.cicd-commercial-clean [data-cicd-polish-toolbar] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--cicd-polish-border);
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgba(37, 99, 235, .14), rgba(15, 23, 42, .08));
+}
+
+.cicd-commercial-clean [data-cicd-polish-toolbar] .title {
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.cicd-commercial-clean [data-cicd-polish-toolbar] .sub {
+  opacity: .7;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.cicd-commercial-clean [data-cicd-polish-toolbar] .actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cicd-commercial-clean [data-cicd-polish-toolbar] button {
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, .72);
+  color: #dbeafe;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.cicd-commercial-clean [data-cicd-polish-toolbar] button.active {
+  background: rgba(37, 99, 235, .42);
+  border-color: rgba(96, 165, 250, .62);
+}
+
+.cicd-commercial-clean table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.cicd-commercial-clean table thead th,
+.cicd-commercial-clean table tr:first-child th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  backdrop-filter: blur(10px);
+  background: rgba(21, 30, 52, .96) !important;
+  color: #dbeafe !important;
+  font-size: 11px !important;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.cicd-commercial-clean table tbody tr,
+.cicd-commercial-clean table tr {
+  transition: background .15s ease, opacity .15s ease, transform .15s ease;
+}
+
+.cicd-commercial-clean table tbody tr:hover,
+.cicd-commercial-clean table tr:hover {
+  background: rgba(59, 130, 246, .08) !important;
+}
+
+.cicd-commercial-clean .cicd-old-fail-hidden {
+  display: none !important;
+}
+
+.cicd-commercial-clean .cicd-old-fail-muted {
+  opacity: .48;
+  filter: grayscale(.25);
+}
+
+.cicd-commercial-clean .cicd-row-latest-pass {
+  box-shadow: inset 3px 0 0 rgba(34, 197, 94, .8);
+  background: rgba(34, 197, 94, .04) !important;
+}
+
+.cicd-commercial-clean .cicd-evidence-short {
+  display: inline-block;
+  max-width: 440px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+  color: #bfdbfe;
+}
+
+.cicd-commercial-clean .cicd-production-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border: 1px solid rgba(34, 197, 94, .35);
+  border-radius: 999px;
+  background: rgba(34, 197, 94, .12);
+  color: #86efac;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.cicd-commercial-clean .cicd-status-pass,
+.cicd-commercial-clean [class*="pass"],
+.cicd-commercial-clean [class*="PASS"] {
+  text-shadow: none;
+}
+
+.cicd-commercial-clean .cicd-polish-section-label {
+  margin: 8px 0 4px;
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.cicd-commercial-clean .cicd-polish-legend {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0 8px;
+  opacity: .85;
+  font-size: 11px;
+}
+
+.cicd-commercial-clean .cicd-polish-pill {
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(15, 23, 42, .55);
+}

@@ -1,0 +1,93 @@
+/* CICD_FINAL_GATE_REAL_DRAWER_V5 */
+.vsp-gate-real-box {
+  border: 1px solid rgba(130,160,210,.16);
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.vsp-gate-real-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #8f9eb7;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.vsp-gate-real-value {
+  font-size: 18px;
+  color: #dbe7f5;
+  font-weight: 900;
+}
+
+.vsp-gate-real-pass {
+  color: #7fea86;
+}
+
+.vsp-gate-real-fail {
+  color: #ff7b7b;
+}
+
+.vsp-gate-real-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+}
+
+.vsp-gate-real-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(130,160,210,.09);
+  padding: 8px 0;
+  font-size: 12px;
+}
+
+.vsp-gate-real-row:last-child {
+  border-bottom: 0;
+}
+
+.vsp-gate-real-key {
+  color: #8f9eb7;
+}
+
+.vsp-gate-real-val {
+  color: #dbe7f5;
+  font-weight: 800;
+  text-align: right;
+}
+
+.vsp-gate-real-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  border: 1px solid rgba(126,234,134,.28);
+  background: rgba(126,234,134,.10);
+  color: #bfffc5;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.vsp-gate-real-chip.off {
+  border-color: rgba(255,123,123,.25);
+  background: rgba(255,123,123,.10);
+  color: #ffc7c7;
+}
+
+.vsp-gate-real-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow: auto;
+  border-radius: 12px;
+  background: rgba(0,0,0,.28);
+  border: 1px solid rgba(130,160,210,.12);
+  padding: 10px;
+  color: #b8c6dc;
+  font-size: 11px;
+}

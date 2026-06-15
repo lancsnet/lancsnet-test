@@ -1,0 +1,96 @@
+/* CICD_SUBTAB_LOGIC_V8 */
+body.cicd-subtab-logic-v8 .cicd-subtab-audit-banner {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(96, 165, 250, .28);
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgba(37,99,235,.12), rgba(15,23,42,.05));
+}
+
+body.cicd-subtab-logic-v8 .cicd-subtab-audit-title {
+  font-weight: 800;
+  color: #dbeafe;
+}
+
+body.cicd-subtab-logic-v8 .cicd-subtab-audit-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: .78;
+}
+
+body.cicd-subtab-logic-v8 .cicd-subtab-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+body.cicd-subtab-logic-v8 .cicd-subtab-actions button {
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, .74);
+  color: #dbeafe;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+body.cicd-subtab-logic-v8 .cicd-subtab-actions button.active {
+  background: rgba(37, 99, 235, .4);
+  border-color: rgba(96, 165, 250, .7);
+}
+
+body.cicd-subtab-logic-v8 tr.cicd-row-ops-evidence-v8 {
+  box-shadow: inset 3px 0 0 rgba(148, 163, 184, .45);
+}
+
+body.cicd-subtab-logic-v8 tr.cicd-row-business-run-v8 {
+  box-shadow: inset 3px 0 0 rgba(34, 197, 94, .55);
+}
+
+body.cicd-subtab-logic-v8 .cicd-filter-hidden-v8 {
+  display: none !important;
+}
+
+body.cicd-subtab-logic-v8 .cicd-row-type-pill-v8 {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  font-size: 10px;
+  font-weight: 800;
+  opacity: .9;
+}
+
+body.cicd-subtab-logic-v8 .cicd-row-type-business-v8 {
+  color: #86efac;
+  background: rgba(34,197,94,.12);
+}
+
+body.cicd-subtab-logic-v8 .cicd-row-type-evidence-v8 {
+  color: #cbd5e1;
+  background: rgba(148,163,184,.12);
+}
+
+body.cicd-subtab-logic-v8 .cicd-evidence-short-v8 {
+  display: inline-block;
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: #bfdbfe;
+}
+
+body.cicd-subtab-logic-v8 .cicd-copy-path-v8 {
+  margin-left: 6px;
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: rgba(15, 23, 42, .65);
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 10px;
+}

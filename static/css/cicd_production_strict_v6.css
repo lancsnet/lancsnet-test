@@ -1,0 +1,123 @@
+/* CICD_PRODUCTION_STRICT_V6 */
+body.cicd-production-strict {
+  text-rendering: geometricPrecision;
+}
+
+body.cicd-production-strict .cicd-prod-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(96, 165, 250, .28);
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgba(37, 99, 235, .12), rgba(15, 23, 42, .06));
+}
+
+body.cicd-production-strict .cicd-prod-title {
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+body.cicd-production-strict .cicd-prod-sub {
+  opacity: .72;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+body.cicd-production-strict .cicd-prod-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body.cicd-production-strict .cicd-prod-actions button {
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, .72);
+  color: #dbeafe;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+body.cicd-production-strict .cicd-prod-actions button.active {
+  background: rgba(37, 99, 235, .38);
+  border-color: rgba(96, 165, 250, .62);
+}
+
+body.cicd-production-strict .cicd-prod-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border: 1px solid rgba(34, 197, 94, .35);
+  border-radius: 999px;
+  background: rgba(34, 197, 94, .12);
+  color: #86efac;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+body.cicd-production-strict table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+body.cicd-production-strict table thead th,
+body.cicd-production-strict table tr:first-child th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  backdrop-filter: blur(10px);
+  background: rgba(21, 30, 52, .96) !important;
+  color: #dbeafe !important;
+  font-size: 11px !important;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+body.cicd-production-strict table tbody tr:hover,
+body.cicd-production-strict table tr:hover {
+  background: rgba(59, 130, 246, .08) !important;
+}
+
+body.cicd-production-strict .cicd-evidence-short {
+  display: inline-block;
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+  color: #bfdbfe;
+}
+
+body.cicd-production-strict .cicd-copy-path {
+  margin-left: 6px;
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: rgba(15, 23, 42, .65);
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+body.cicd-production-strict .cicd-prod-filter-hidden {
+  display: none !important;
+}
+
+body.cicd-production-strict .cicd-prod-row-fail {
+  box-shadow: inset 3px 0 0 rgba(239, 68, 68, .72);
+}
+
+body.cicd-production-strict .cicd-prod-row-pass {
+  box-shadow: inset 3px 0 0 rgba(34, 197, 94, .66);
+}
+
+body.cicd-production-strict .cicd-prod-row-block {
+  box-shadow: inset 3px 0 0 rgba(245, 158, 11, .72);
+}

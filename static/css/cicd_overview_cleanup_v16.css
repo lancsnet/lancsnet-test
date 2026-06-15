@@ -1,0 +1,72 @@
+/* CICD_OVERVIEW_CLEANUP_V16
+   Final overview cleanup:
+   - hide legacy overview sections after V15 is rendered
+   - prevent duplicate pipeline/timeline/evidence split
+   - make overview feel like one coherent control center
+*/
+
+#tab-overview.cicd-v16-cleaned > .grid2,
+#tab-overview.cicd-v16-cleaned > .grid3,
+#tab-overview.cicd-v16-cleaned > .card {
+  display: none !important;
+}
+
+/* Keep only section head + V15 overview grid. */
+#tab-overview.cicd-v16-cleaned > .section-head,
+#tab-overview.cicd-v16-cleaned > .cicd-v15-overview-grid {
+  display: flex;
+}
+
+#tab-overview.cicd-v16-cleaned > .cicd-v15-overview-grid {
+  display: grid !important;
+}
+
+/* Make V15 the primary layout */
+#tab-overview .cicd-v15-overview-grid {
+  margin-top: 12px !important;
+  margin-bottom: 0 !important;
+}
+
+#tab-overview .cicd-v15-panel {
+  box-shadow: 0 14px 34px rgba(0,0,0,.16);
+}
+
+/* Remove excess blank vertical feel */
+#tab-overview {
+  padding-bottom: 14px !important;
+}
+
+#tab-overview .cicd-v15-list {
+  max-height: none !important;
+}
+
+#tab-overview .cicd-v15-row {
+  min-height: 54px;
+}
+
+#tab-overview .cicd-v15-panel:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Timeline in V15 only */
+#timeline {
+  display: none !important;
+}
+
+#timelineV15 {
+  display: flex !important;
+}
+
+/* Keep layout contained */
+html,
+body,
+.v13,
+#tab-overview {
+  overflow-x: hidden !important;
+}
+
+@media (max-width: 1500px) {
+  #tab-overview .cicd-v15-overview-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

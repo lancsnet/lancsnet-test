@@ -1,0 +1,193 @@
+/* CICD_ENTERPRISE_LAYOUT_V11
+   Production layout hardening:
+   - no page horizontal overflow
+   - overview cards stay inside panel
+   - small tables do not force 900px width
+   - right column never floats outside container
+*/
+
+html,
+body {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+body {
+  padding: 12px !important;
+}
+
+.cicd {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 auto !important;
+  overflow-x: hidden !important;
+}
+
+.top,
+.grid-main,
+.grid-3,
+.split,
+.card,
+.panel,
+.hero,
+.kpi,
+.table-wrap {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.top {
+  grid-template-columns: minmax(340px, 1.4fr) repeat(4, minmax(150px, .65fr)) !important;
+}
+
+.panel {
+  overflow: hidden !important;
+}
+
+.grid-main {
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr) !important;
+  align-items: start !important;
+}
+
+.grid-main > *,
+.split > *,
+.grid-3 > * {
+  min-width: 0 !important;
+}
+
+.card {
+  overflow: hidden !important;
+}
+
+.table-wrap {
+  width: 100% !important;
+  overflow: auto !important;
+}
+
+/* Large detail tabs can keep wider tables. */
+#tab-prgate table,
+#tab-scheduler table,
+#tab-history table,
+#tab-evidence table {
+  min-width: 900px !important;
+}
+
+/* Overview tables must fit their cards, otherwise they push the right column outside. */
+#tab-overview table {
+  min-width: 100% !important;
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+
+#tab-overview th,
+#tab-overview td {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+#tab-overview .table-wrap {
+  max-height: 280px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+/* Avoid ugly horizontal scrollbar in overview cards. */
+#tab-overview .path {
+  max-width: 100% !important;
+}
+
+/* Better visual density and alignment. */
+#tab-overview .grid-main {
+  gap: 12px !important;
+}
+
+#tab-overview .split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+}
+
+/* The Evidence split card should remain visually integrated, not float outside. */
+#tab-overview > .grid-main > div:last-child {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+/* Flow should not force width. */
+.flow {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+}
+
+.flow-step {
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Native scrollbar polish for dark UI. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #475569 #0b1223;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0b1223;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 999px;
+  border: 2px solid #0b1223;
+}
+
+@media (max-width: 1500px) {
+  .top {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+
+  .hero {
+    grid-column: 1 / -1 !important;
+  }
+
+  .grid-main {
+    grid-template-columns: 1fr !important;
+  }
+
+  #tab-overview .split {
+    grid-template-columns: 1fr !important;
+  }
+
+  .flow {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  body {
+    padding: 8px !important;
+  }
+
+  .top,
+  .grid-3,
+  .split,
+  .grid-main {
+    grid-template-columns: 1fr !important;
+  }
+
+  .flow {
+    grid-template-columns: 1fr !important;
+  }
+
+  #tab-prgate table,
+  #tab-scheduler table,
+  #tab-history table,
+  #tab-evidence table {
+    min-width: 760px !important;
+  }
+}

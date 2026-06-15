@@ -1,0 +1,96 @@
+/* CICD_SCHEDULER_REAL_DRAWER_V6 */
+.vsp-scheduler-box {
+  border: 1px solid rgba(130,160,210,.16);
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.vsp-scheduler-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #8f9eb7;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.vsp-scheduler-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(130,160,210,.09);
+  font-size: 12px;
+}
+
+.vsp-scheduler-row:last-child {
+  border-bottom: 0;
+}
+
+.vsp-scheduler-key {
+  color: #8f9eb7;
+}
+
+.vsp-scheduler-val {
+  color: #dbe7f5;
+  font-weight: 800;
+  text-align: right;
+}
+
+.vsp-scheduler-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  border: 1px solid rgba(126,234,134,.28);
+  background: rgba(126,234,134,.10);
+  color: #bfffc5;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.vsp-scheduler-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.vsp-scheduler-form .full {
+  grid-column: 1 / -1;
+}
+
+.vsp-scheduler-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #8f9eb7;
+  font-weight: 900;
+}
+
+.vsp-scheduler-form input,
+.vsp-scheduler-form select,
+.vsp-scheduler-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(6, 11, 18, .92);
+  color: #eef5ff;
+  border: 1px solid rgba(130,160,210,.20);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.vsp-scheduler-form textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+@media (max-width: 760px) {
+  .vsp-scheduler-form {
+    grid-template-columns: 1fr;
+  }
+}

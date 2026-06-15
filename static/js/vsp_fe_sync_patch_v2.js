@@ -1,0 +1,1 @@
+../vsp_fe_sync_patch_v2.js

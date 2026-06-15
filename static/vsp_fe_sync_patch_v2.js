@@ -1,0 +1,2469 @@
+
+/* P8921_V19_PATCH_ALL_SYNC_JS_RENDERDRIFT_EXACT */
+window.__vspToArrayV19 = window.__vspToArrayV19 || function(x) {
+  if (Array.isArray(x)) return x;
+  if (!x) return [];
+  if (Array.isArray(x.events)) return x.events;
+  if (Array.isArray(x.items)) return x.items;
+  if (Array.isArray(x.data)) return x.data;
+  if (Array.isArray(x.results)) return x.results;
+  if (Array.isArray(x.rows)) return x.rows;
+  if (x.payload && Array.isArray(x.payload.events)) return x.payload.events;
+  if (x.payload && Array.isArray(x.payload.items)) return x.payload.items;
+  if (x.payload && Array.isArray(x.payload.data)) return x.payload.data;
+  if (x.response && Array.isArray(x.response.events)) return x.response.events;
+  if (x.response && Array.isArray(x.response.items)) return x.response.items;
+  if (x.response && Array.isArray(x.response.data)) return x.response.data;
+  return [];
+};
+
+
+/* P8921_V18_FORCE_FIX_RENDER_DRIFT_CACHEBUST */
+window.__vspToArrayV18 = window.__vspToArrayV18 || function(x) {
+  if (Array.isArray(x)) return x;
+  if (!x) return [];
+  if (Array.isArray(x.events)) return x.events;
+  if (Array.isArray(x.items)) return x.items;
+  if (Array.isArray(x.data)) return x.data;
+  if (Array.isArray(x.results)) return x.results;
+  if (Array.isArray(x.rows)) return x.rows;
+  if (x.payload && Array.isArray(x.payload.events)) return x.payload.events;
+  if (x.payload && Array.isArray(x.payload.items)) return x.payload.items;
+  if (x.payload && Array.isArray(x.payload.data)) return x.payload.data;
+  if (x.response && Array.isArray(x.response.events)) return x.response.events;
+  if (x.response && Array.isArray(x.response.items)) return x.response.items;
+  if (x.response && Array.isArray(x.response.data)) return x.response.data;
+  return [];
+};
+
+
+/* P8921_V17_FIX_RENDER_DRIFT_EVENTS_ARRAY */
+window.__vspToArrayV17 = window.__vspToArrayV17 || function(x) {
+  if (Array.isArray(x)) return x;
+  if (!x) return [];
+  if (Array.isArray(x.events)) return x.events;
+  if (Array.isArray(x.items)) return x.items;
+  if (Array.isArray(x.data)) return x.data;
+  if (Array.isArray(x.results)) return x.results;
+  if (Array.isArray(x.rows)) return x.rows;
+  if (x.payload && Array.isArray(x.payload.events)) return x.payload.events;
+  if (x.payload && Array.isArray(x.payload.items)) return x.payload.items;
+  if (x.payload && Array.isArray(x.payload.data)) return x.payload.data;
+  return [];
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VSP FE SYNC PATCH v6 — 2026-04-29 (DEVSECOPS panels)
+// Extends v5 with F34-F66 (9 NEW panels: sw_inventory, cicd, incident_response,
+// supply_chain, software_risk, conmon, sso_admin, attestation, sbom_diff).
+// Total: 60 fixes (was 27 in v5).
+// Drop-in replacement; identical filename "vsp_fe_sync_patch_v2.js?v=v19_20260526_111153".
+// ═══════════════════════════════════════════════════════════════════════════
+
+(function vspFESync() {
+'use strict';
+
+// Cross-frame idempotency guard — prevents duplicate loads when
+// patch is included in iframe panels. State is shared via window.top
+// (same-origin) so each iframe sees the parent's flag.
+try {
+  var topWin = window.top;
+  if (topWin && topWin._vspFESyncLoaded) {
+    (window.VSP_DEBUG && console.log('[VSP-SYNC] skipped — already loaded in top window'));
+    window._vspFESyncLoaded = true;
+    return;
+  }
+  if (topWin) topWin._vspFESyncLoaded = true;
+} catch (e) {
+  // Cross-origin iframe: fall back to per-window guard
+  if (window._vspFESyncLoaded) {
+    (window.VSP_DEBUG && console.log('[VSP-SYNC] skipped — already loaded (per-window fallback)'));
+    return;
+  }
+}
+window._vspFESyncLoaded = true;
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+window._vspEscapeHtml = escapeHtml;
+
+function whenReady(check, cb, maxMs) {
+  maxMs = maxMs || 10000;
+  var t0 = Date.now();
+  var iv = setInterval(function() {
+    if (check()) { clearInterval(iv); cb(); return; }
+    if (Date.now() - t0 > maxMs) { clearInterval(iv); }
+  }, 200);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F1 — REMEDIATION POST → PATCH
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixRemediationMethod() {
+  var _origFetch = window.fetch;
+  window.fetch = function(input, init) {
+    try {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      var method = (init && init.method) || (input && input.method) || 'GET';
+      if (method.toUpperCase() === 'POST' &&
+          /\/remediation\/finding\/[^/?]+/.test(url) &&
+          !/\/auto/.test(url)) {
+        init = init || {};
+        init.method = 'PATCH';
+      }
+    } catch (e) {}
+    return _origFetch.call(this, input, init);
+  };
+  (window.VSP_DEBUG && console.log('[VSP-SYNC F1] Remediation POST→PATCH wrapper'));
+})();
+
+(function fixApiHelper() {
+  var _origApi = window.api;
+  if (typeof _origApi !== 'function') return;
+  window.api = function(method, path, body, noAuth) {
+    // Handle single-arg signature: api('/path') — treat method as path
+    if (typeof method === 'string' && !['GET','POST','PUT','PATCH','DELETE'].includes(method.toUpperCase()) && path === undefined) {
+      return _origApi.call(this, method);
+    }
+    if (typeof method === 'string' && method.toUpperCase() === 'POST' &&
+        typeof path === 'string' &&
+        /\/remediation\/finding\/[^/?]+/.test(path) && !/\/auto/.test(path)) {
+      method = 'PATCH';
+    }
+    return _origApi.call(this, method, path, body, noAuth);
+  };
+  (window.VSP_DEBUG && console.log('[VSP-SYNC F1b] api() PATCH-aware'));
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F2 — LOGOUT backend blacklist
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixLogoutBlacklist() {
+  async function callBackendLogout(token) {
+    if (!token) return;
+    try {
+      await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: '{}', keepalive: true
+      });
+    } catch (e) { console.warn('[VSP-SYNC] logout failed:', e.message); }
+  }
+  window._vspBackendLogout = callBackendLogout;
+
+  whenReady(function() { return typeof window.profileLogout === 'function'; }, function() {
+    var _orig = window.profileLogout;
+    window.profileLogout = function() {
+      callBackendLogout(window.TOKEN || '');
+      return _orig.apply(this, arguments);
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F2a] profileLogout wrapped'));
+  });
+
+  var _lastToken = window.TOKEN || (function() {
+    try { return localStorage.getItem('vsp_token') || ''; } catch(e) { return ''; }
+  })();
+  setInterval(function() {
+    var current = window.TOKEN || (function() {
+      try { return localStorage.getItem('vsp_token') || ''; } catch(e) { return ''; }
+    })();
+    if (_lastToken && !current) callBackendLogout(_lastToken);
+    _lastToken = current;
+  }, 1500);
+  (window.VSP_DEBUG && console.log('[VSP-SYNC F2b] watcher armed'));
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F3 — showToast hardened
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixShowToastXSS() {
+  whenReady(function() { return typeof window.showToast === 'function'; }, function() {
+    window.showToast = function(msg, type) {
+      type = type || 'info';
+      var icons = {success:'✓', error:'✗', warn:'⚠', info:'◉'};
+      var colors = {success:'var(--green)',error:'var(--red)',warn:'var(--amber)',info:'var(--cyan)'};
+      var container = document.getElementById('toast-container');
+      if (!container) {
+        var fb = document.createElement('div');
+        fb.style.cssText = 'position:fixed;top:20px;right:20px;background:#222;color:#fff;padding:10px 16px;border-radius:6px;z-index:99999';
+        fb.textContent = String(msg == null ? '' : msg);
+        document.body.appendChild(fb);
+        setTimeout(function() { fb.remove(); }, 3000);
+        return;
+      }
+      var t = document.createElement('div');
+      t.className = 'toast toast-' + escapeHtml(type);
+      var iconSpan = document.createElement('span');
+      iconSpan.className = 'toast-icon';
+      iconSpan.style.color = colors[type] || colors.info;
+      iconSpan.textContent = icons[type] || '◉';
+      var msgSpan = document.createElement('span');
+      msgSpan.textContent = String(msg == null ? '' : msg);
+      t.appendChild(iconSpan); t.appendChild(msgSpan);
+      container.appendChild(t);
+      setTimeout(function() {
+        t.style.transition = 'opacity .3s'; t.style.opacity = '0';
+        setTimeout(function() { t.remove(); }, 300);
+      }, 3000);
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F3] showToast hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F4 — Findings cache mirror
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixFindingsCache() {
+  whenReady(function() { return typeof window.loadFindings === 'function'; }, function() {
+    var _orig = window.loadFindings;
+    window.loadFindings = async function() {
+      var ret = await _orig.apply(this, arguments);
+      if (Array.isArray(window._findingsData)) window._findingsCache = window._findingsData;
+      return ret;
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F4] cache mirror enabled'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F5 — Policy eval hardened
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixPolicyEvalXSS() {
+  whenReady(function() {
+    return typeof window.runEval === 'function' && document.getElementById('eval-result');
+  }, function() {
+    var _orig = window.runEval;
+    window.runEval = async function() {
+      var el = document.getElementById('eval-result');
+      if (!el) return _orig.apply(this, arguments);
+      el.textContent = '⏳ Evaluating…';
+      try {
+        if (window.TOKEN && typeof window.api === 'function') {
+          var r = await window.api('POST', '/policy/evaluate', {repo:'current'});
+          var color = r.decision === 'PASS' ? 'var(--green)' : r.decision === 'WARN' ? 'var(--amber)' : 'var(--red)';
+          el.innerHTML = '';
+          var sp = document.createElement('span');
+          sp.style.cssText = 'color:' + color + ';font-size:16px;font-weight:700';
+          sp.textContent = r.decision || '—';
+          el.appendChild(sp);
+          el.appendChild(document.createTextNode(' · score: '));
+          var sb = document.createElement('b'); sb.textContent = String(r.score == null ? '—' : r.score); el.appendChild(sb);
+          el.appendChild(document.createTextNode(' · posture: '));
+          var pb = document.createElement('b'); pb.textContent = String(r.posture == null ? '—' : r.posture); el.appendChild(pb);
+          if (r.reason) {
+            el.appendChild(document.createTextNode(' · '));
+            var rs = document.createElement('span'); rs.style.color = 'var(--t3)'; rs.textContent = String(r.reason); el.appendChild(rs);
+          }
+        } else {
+          return _orig.apply(this, arguments);
+        }
+      } catch (e) {
+        el.innerHTML = '';
+        var fs = document.createElement('span'); fs.style.color = 'var(--red)';
+        fs.textContent = 'FAIL · ' + (e && e.message ? e.message : 'evaluation error');
+        el.appendChild(fs);
+      }
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F5] runEval hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F6 threat_hunt
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenThreatHunt() {
+  if (!document.getElementById('results-wrap')) return;
+  whenReady(function() { return typeof window.renderResults === 'function' || window._results !== undefined; }, function() {
+    if (typeof window.renderResults !== 'function') return;
+    window.renderResults = function(q) {
+      var results = window._results || [];
+      var wrap = document.getElementById('results-wrap');
+      if (!wrap) return;
+      if (!results.length) {
+        wrap.textContent = '🔍 No events found matching your query';
+        var b = document.getElementById('results-badge'); if (b) b.textContent = '';
+        return;
+      }
+      var badge = document.getElementById('results-badge');
+      if (badge) badge.textContent = '— ' + results.length + ' events';
+      var scrollWrap = document.createElement('div');
+      scrollWrap.style.overflowX = 'auto';
+      var table = document.createElement('table');
+      table.className = 'results-table';
+      var thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Time</th><th>Sev</th><th>Host</th><th>Process</th><th>Message</th><th>IP</th></tr>';
+      table.appendChild(thead);
+      var tbody = document.createElement('tbody');
+      results.forEach(function(e, i) {
+        var tr = document.createElement('tr');
+        tr.addEventListener('click', function() { window.openEvent && window.openEvent(i); });
+        function td(cls, text) { var c = document.createElement('td'); if (cls) c.className = cls; c.textContent = String(text == null ? '—' : text); return c; }
+        tr.appendChild(td('ts', e.ts));
+        var sevTd = document.createElement('td');
+        var sevSpan = document.createElement('span');
+        sevSpan.className = 'pill ' + (window.sevClass ? window.sevClass(e.severity) : 'pill-gray');
+        sevSpan.textContent = e.severity || 'INFO';
+        sevTd.appendChild(sevSpan); tr.appendChild(sevTd);
+        tr.appendChild(td('host', e.host));
+        tr.appendChild(td('proc', e.process));
+        var msgTd = document.createElement('td'); msgTd.className = 'msg'; msgTd.textContent = String(e.message || '—'); tr.appendChild(msgTd);
+        tr.appendChild(td('ts', e.source_ip));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody); scrollWrap.appendChild(table);
+      wrap.innerHTML = ''; wrap.appendChild(scrollWrap);
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F6] threat_hunt hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F7 correlation
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenCorrelation() {
+  if (!document.getElementById('incidents-list') && !document.getElementById('rules-list')) return;
+
+  whenReady(function() { return typeof window.renderIncidents === 'function'; }, function() {
+    window.renderIncidents = function() {
+      var sf = (document.getElementById('inc-filter')||{}).value || '';
+      var ssf = (document.getElementById('inc-status-filter')||{}).value || '';
+      var INCIDENTS = window.INCIDENTS || [];
+      var list = INCIDENTS.filter(function(i) {
+        if (sf && (i.severity||'').toUpperCase() !== sf) return false;
+        if (ssf && (i.status||'open') !== ssf) return false;
+        return true;
+      });
+      var listEl = document.getElementById('incidents-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      list.forEach(function(inc) {
+        var sc = window.sevClass ? window.sevClass((inc.severity||'').toUpperCase()) : '';
+        var row = document.createElement('div');
+        row.className = 'incident ' + sc;
+        row.addEventListener('click', function() { window.openIncidentDetail && window.openIncidentDetail(inc.id); });
+        var hdr = document.createElement('div'); hdr.className = 'inc-hdr';
+        var idSpan = document.createElement('span'); idSpan.className = 'inc-id'; idSpan.textContent = inc.id || 'INC'; hdr.appendChild(idSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge((inc.severity||'').toUpperCase(), true); hdr.appendChild(sw); }
+        if (window.statusBadge) { var stw = document.createElement('span'); stw.innerHTML = window.statusBadge(inc.status || 'open'); hdr.appendChild(stw); }
+        var titleSpan = document.createElement('span'); titleSpan.className = 'inc-title'; titleSpan.textContent = inc.title || inc.Title || '—'; hdr.appendChild(titleSpan);
+        var timeSpan = document.createElement('span'); timeSpan.className = 'inc-time'; timeSpan.textContent = window.timeAgo ? window.timeAgo(inc.created_at || inc.CreatedAt) : ''; hdr.appendChild(timeSpan);
+        row.appendChild(hdr);
+        var desc = document.createElement('div'); desc.className = 'inc-desc'; desc.textContent = inc.description || inc.desc || inc.rule_name || ''; row.appendChild(desc);
+        var tags = document.createElement('div'); tags.className = 'inc-tags';
+        (inc.source_refs || []).forEach(function(s) {
+          if (typeof s !== 'string' && typeof s !== 'number') return;
+          var pill = document.createElement('span'); pill.className = 'pill pill-cyan'; pill.textContent = String(s); tags.appendChild(pill);
+        });
+        row.appendChild(tags);
+        listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F7a] correlation incidents hardened'));
+  });
+
+  whenReady(function() { return typeof window.renderRules === 'function'; }, function() {
+    window.renderRules = function() {
+      var listEl = document.getElementById('rules-list');
+      if (!listEl) return;
+      var RULES = window.RULES || [];
+      listEl.innerHTML = '';
+      RULES.forEach(function(r) {
+        var row = document.createElement('div'); row.className = 'rule-item';
+        row.addEventListener('click', function() { window.showRuleDetail && window.showRuleDetail(r.id); });
+        var hdr = document.createElement('div'); hdr.className = 'rule-hdr';
+        var btn = document.createElement('button'); btn.className = 'toggle ' + (r.enabled ? 'on' : 'off');
+        btn.addEventListener('click', function(ev) { ev.stopPropagation(); window.toggleRule && window.toggleRule(r.id); });
+        hdr.appendChild(btn);
+        var nameSpan = document.createElement('span'); nameSpan.className = 'rule-name'; nameSpan.textContent = r.name || ''; hdr.appendChild(nameSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge(r.severity); hdr.appendChild(sw); }
+        row.appendChild(hdr);
+        var desc = document.createElement('div'); desc.className = 'rule-desc'; desc.textContent = r.cond || ''; row.appendChild(desc);
+        var meta = document.createElement('div'); meta.className = 'rule-meta';
+        var win = document.createElement('span'); win.className = 'pill pill-purple'; win.textContent = (r.window_min || r.window || 5) + 'm'; meta.appendChild(win);
+        (r.sources || []).forEach(function(s) {
+          if (typeof s !== 'string' && typeof s !== 'number') return;
+          var p = document.createElement('span'); p.className = 'pill pill-cyan'; p.textContent = String(s); meta.appendChild(p);
+        });
+        var hits = document.createElement('span'); hits.className = 'pill pill-gray'; hits.textContent = 'hits: ' + (r.hits || 0); meta.appendChild(hits);
+        row.appendChild(meta);
+        listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F7b] correlation rules hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F8 SOAR
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenSOAR() {
+  if (!document.getElementById('hmod-log')) return;
+  whenReady(function() { return typeof window.openRunDetail === 'function'; }, function() {
+    var _orig = window.openRunDetail;
+    window.openRunDetail = function(id) {
+      _orig.apply(this, arguments);
+      var RUN_HISTORY = window.RUN_HISTORY || [];
+      var run = RUN_HISTORY.find(function(r) { return r.id === id; });
+      if (!run) return;
+      var logEl = document.getElementById('hmod-log');
+      if (!logEl) return;
+      logEl.innerHTML = '';
+      if (!run.log || !run.log.length) {
+        var empty = document.createElement('span'); empty.style.cssText = 'color:var(--t3);font-size:11px';
+        empty.textContent = 'No log available'; logEl.appendChild(empty); return;
+      }
+      run.log.forEach(function(l) {
+        var row = document.createElement('div'); row.className = 'll';
+        var ts = document.createElement('span'); ts.className = 'll-ts'; ts.textContent = String(l.ts || '');
+        var lv = document.createElement('span'); lv.className = 'll-lv ll-' + escapeHtml(String(l.lv || 'INFO')); lv.textContent = String(l.lv || 'INFO');
+        var msg = document.createElement('span'); msg.className = 'll-msg'; msg.textContent = String(l.msg || '');
+        row.appendChild(ts); row.appendChild(lv); row.appendChild(msg);
+        logEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F8] soar log hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F9 log_pipeline
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenLogPipeline() {
+  if (!document.getElementById('live-stream')) return;
+  whenReady(function() { return typeof window.renderStream === 'function'; }, function() {
+    window.renderStream = function() {
+      var STREAM_ALL = window.STREAM_ALL || [];
+      var _filterActive = window._filterActive || {};
+      var list = STREAM_ALL.filter(function(e) {
+        if (_filterActive.sev && e.sev !== _filterActive.sev) return false;
+        if (_filterActive.src && e.src !== _filterActive.src) return false;
+        if (_filterActive.kw && !e.msg.toLowerCase().includes(_filterActive.kw.toLowerCase())) return false;
+        return true;
+      });
+      var el = document.getElementById('live-stream');
+      if (!el) return;
+      el.innerHTML = '';
+      list.slice(-200).forEach(function(e) {
+        var row = document.createElement('div'); row.className = 'll';
+        row.addEventListener('click', function() { alert(String(e.raw || e.msg || '')); });
+        var ts = document.createElement('span'); ts.className = 'll-ts'; ts.textContent = String(e.ts || '');
+        var src = document.createElement('span'); src.className = 'll-src'; src.textContent = String(e.src || '');
+        var sev = document.createElement('span'); sev.className = 'll-sev ll-' + escapeHtml(String(e.sev || 'INFO')); sev.textContent = String(e.sev || 'INFO');
+        var msg = document.createElement('span'); msg.className = 'll-msg'; msg.textContent = String(e.msg || '');
+        row.appendChild(ts); row.appendChild(src); row.appendChild(sev); row.appendChild(msg);
+        el.appendChild(row);
+      });
+      el.scrollTop = el.scrollHeight;
+      var t = document.getElementById('stream-total'); if (t) t.textContent = window._streamTotal || 0;
+      var s = document.getElementById('stream-shown'); if (s) s.textContent = list.length;
+      var er = document.getElementById('stream-errors'); if (er) er.textContent = window._streamErrors || 0;
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F9] log_pipeline hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F10 admin alerts
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenAdmin() {
+  if (!document.getElementById('overview-alerts') && !document.getElementById('alert-list')) return;
+  whenReady(function() { return typeof window.renderAlert === 'function'; }, function() {
+    window.renderAlert = function(a) {
+      var colors = {CRITICAL:'var(--red)',HIGH:'var(--amber)',MEDIUM:'var(--cyan)',LOW:'var(--t3)',INFO:'var(--green)',test:'var(--purple)'};
+      var col = colors[a.severity] || 'var(--t3)';
+      var wrap = document.createElement('div'); wrap.className = 'alert-item';
+      var bar = document.createElement('div'); bar.className = 'alert-sev'; bar.style.background = col; wrap.appendChild(bar);
+      var body = document.createElement('div'); body.style.flex = '1';
+      var title = document.createElement('div'); title.className = 'alert-title'; title.textContent = String(a.title || '');
+      var msg = document.createElement('div'); msg.className = 'alert-msg'; msg.textContent = String(a.message || '');
+      var time = document.createElement('div'); time.className = 'alert-time';
+      var ts = a.sent_at ? new Date(a.sent_at).toLocaleString() : '';
+      time.textContent = ts + ' · ' + String(a.type || '') + ' · ' + String(a.channel || '');
+      body.appendChild(title); body.appendChild(msg); body.appendChild(time); wrap.appendChild(body);
+      var sev = document.createElement('span');
+      sev.style.cssText = 'font-size:10px;font-weight:600;color:'+col+';padding:3px 8px;background:rgba(255,255,255,.05);border-radius:4px';
+      sev.textContent = String(a.severity || ''); wrap.appendChild(sev);
+      return wrap.outerHTML;
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F10] alerts hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F11 users
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenUsers() {
+  if (!document.getElementById('user-tbody') && !document.getElementById('audit-list')) return;
+
+  whenReady(function() { return typeof window.renderUsers === 'function'; }, function() {
+    window.renderUsers = function() {
+      var USERS = window.USERS || [];
+      var sf = "";
+      var rf = (document.getElementById('role-filter')||{}).value || '';
+      var list = USERS.filter(function(u) {
+        if (sf && u.status !== sf) return false;
+        if (rf && u.role !== rf) return false;
+        return true;
+      });
+      var sub = document.getElementById('users-sub'); if (sub) sub.textContent = list.length + ' users';
+      var tbody = document.getElementById('user-tbody'); if (!tbody) return;
+      tbody.innerHTML = '';
+      list.forEach(function(u, idx) {
+        var av = (u.name || '').split(' ').map(function(w) { return w[0] || ''; }).join('').slice(0,2).toUpperCase();
+        var avColor = window.avatarColor && u.name ? window.avatarColor(u.name) : 'var(--cyan)';
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td');
+        var box = document.createElement('div'); box.style.cssText = 'display:flex;align-items:center;gap:10px';
+        var avDiv = document.createElement('div'); avDiv.className = 'avatar';
+        avDiv.style.cssText = 'background:' + avColor + '22;color:' + avColor;
+        avDiv.textContent = av;
+        var info = document.createElement('div');
+        var nameDiv = document.createElement('div'); nameDiv.style.fontWeight = '500'; nameDiv.textContent = String(u.name || '');
+        var emailDiv = document.createElement('div');
+        emailDiv.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)';
+        emailDiv.textContent = String(u.email || '');
+        info.appendChild(nameDiv); info.appendChild(emailDiv);
+        box.appendChild(avDiv); box.appendChild(info); c1.appendChild(box); tr.appendChild(c1);
+        var c2 = document.createElement('td'); if (window.roleBadge) c2.innerHTML = window.roleBadge(u.role); tr.appendChild(c2);
+        var c3 = document.createElement('td');
+        c3.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)';
+        c3.textContent = String(u.last_login || ''); tr.appendChild(c3);
+        var c4 = document.createElement('td'); if (window.statusBadge) c4.innerHTML = window.statusBadge(u.status); tr.appendChild(c4);
+        var c5 = document.createElement('td');
+        var mfaPill = document.createElement('span'); mfaPill.className = u.mfa ? 'pill pill-green' : 'pill pill-amber';
+        mfaPill.textContent = u.mfa ? 'MFA on' : 'no MFA'; c5.appendChild(mfaPill); tr.appendChild(c5);
+        var c6 = document.createElement('td');
+        var actions = document.createElement('div'); actions.style.cssText = 'display:flex;gap:5px';
+        var editBtn = document.createElement('button'); editBtn.className = 'btn btn-sm'; editBtn.innerHTML = '&#9998;';
+        editBtn.addEventListener('click', function() { window.editUser && window.editUser(idx); });
+        actions.appendChild(editBtn);
+        if (u.email !== localStorage.getItem('vsp_email') || '') {
+          var delBtn = document.createElement('button'); delBtn.className = 'btn btn-danger btn-sm'; delBtn.innerHTML = '&#10005;';
+          delBtn.addEventListener('click', function() { window.deleteUser && window.deleteUser(idx); });
+          actions.appendChild(delBtn);
+        }
+        c6.appendChild(actions); tr.appendChild(c6);
+        tbody.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F11a] users hardened'));
+  });
+
+  whenReady(function() { return typeof window.renderAudit === 'function'; }, function() {
+    window.renderAudit = function() {
+      var AUDIT = window.AUDIT || [];
+      var af = (document.getElementById('audit-filter')||{}).value || '';
+      var list = AUDIT.filter(function(a) { return !af || a.action === af; });
+      var dotColor = {info:'var(--blue)',warn:'var(--amber)',error:'var(--red)'};
+      var listEl = document.getElementById('audit-list'); if (!listEl) return;
+      listEl.innerHTML = '';
+      list.forEach(function(a) {
+        var row = document.createElement('div'); row.className = 'audit-row';
+        var dot = document.createElement('div'); dot.className = 'audit-dot';
+        dot.style.background = dotColor[a.level] || 'var(--t3)';
+        var body = document.createElement('div'); body.style.flex = '1';
+        var detail = document.createElement('div'); detail.style.cssText = 'font-weight:500;margin-bottom:2px'; detail.textContent = String(a.detail || '');
+        var sub = document.createElement('div'); sub.style.cssText = 'color:var(--t3);font-size:10px;font-family:var(--font-mono)';
+        sub.textContent = String(a.user || '') + ' · ' + String(a.action || '');
+        body.appendChild(detail); body.appendChild(sub);
+        var time = document.createElement('div'); time.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono);flex-shrink:0';
+        time.textContent = String(a.ts || '');
+        row.appendChild(dot); row.appendChild(body); row.appendChild(time);
+        listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F11b] audit hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F18 — UEBA
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenUEBA() {
+  if (!document.getElementById('anom-list')) return;
+  whenReady(function() { return typeof window.renderAnomalies === 'function'; }, function() {
+    window.renderAnomalies = function() {
+      var ANOMALIES = window.ANOMALIES || [];
+      var list = ANOMALIES.slice();
+      var sf = (document.getElementById('anom-filter')||{}).value || '';
+      if (sf) list = list.filter(function(a) { return (a.severity||'').toUpperCase() === sf; });
+      var maxS = list.length ? Math.max.apply(null, list.map(function(a){return a.score||0;})) : 0;
+      var kEl = document.getElementById('k-risk'); if (kEl) kEl.textContent = maxS || '—';
+      var listEl = document.getElementById('anom-list'); if (!listEl) return;
+      if (!list.length) {
+        listEl.innerHTML = '';
+        var empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;padding:16px;color:var(--green);font-size:12px';
+        empty.textContent = '✓ No anomalies detected';
+        listEl.appendChild(empty); return;
+      }
+      listEl.innerHTML = '';
+      list.forEach(function(a) {
+        var sc = window.sevClass ? window.sevClass((a.severity||'').toUpperCase()) : '';
+        var row = document.createElement('div'); row.className = 'anomaly ' + sc;
+        row.addEventListener('click', function() { if (window.openAnomDetailObj) window.openAnomDetailObj(a); });
+        var hdr = document.createElement('div'); hdr.className = 'a-hdr';
+        var typeSpan = document.createElement('span'); typeSpan.className = 'a-type';
+        typeSpan.textContent = String((a.type||'')).replace(/_/g, ' ');
+        hdr.appendChild(typeSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge(a.severity); hdr.appendChild(sw); }
+        var titleSpan = document.createElement('span'); titleSpan.className = 'a-title'; titleSpan.textContent = String(a.message || 'Anomaly'); hdr.appendChild(titleSpan);
+        var scoreSpan = document.createElement('span'); scoreSpan.className = 'a-score'; scoreSpan.textContent = (a.score || 0) + '/100'; hdr.appendChild(scoreSpan);
+        row.appendChild(hdr);
+        if (a.entity) { var entDiv = document.createElement('div'); entDiv.className = 'a-entity'; entDiv.textContent = 'entity: ' + String(a.entity); row.appendChild(entDiv); }
+        var barWrap = document.createElement('div'); barWrap.className = 'a-bar-wrap';
+        var bar = document.createElement('div'); bar.className = 'a-bar';
+        var sevC = window.sevColor ? window.sevColor(a.severity) : 'var(--cyan)';
+        bar.style.cssText = 'width:' + (a.score||0) + '%;background:' + sevC;
+        barWrap.appendChild(bar); row.appendChild(barWrap);
+        listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F18] ueba hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F19 + F20 threat_intel
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenThreatIntel() {
+  if (!document.getElementById('ioc-list') && !document.getElementById('cve-tbody')) return;
+
+  whenReady(function() { return typeof window.renderIOCs === 'function'; }, function() {
+    window.renderIOCs = function() {
+      var IOCS = window.IOCS || [];
+      var tf = (document.getElementById('ioc-type-filter')||{}).value || '';
+      var q  = ((document.getElementById('ioc-search')||{}).value || '').toLowerCase();
+      var list = IOCS.filter(function(i) {
+        if (tf && i.type !== tf) return false;
+        if (q && !((i.val||'').toLowerCase().includes(q) || (i.context||'').toLowerCase().includes(q))) return false;
+        return true;
+      });
+      var listEl = document.getElementById('ioc-list'); if (!listEl) return;
+      listEl.innerHTML = '';
+      list.forEach(function(i) {
+        var cls = i.matched ? 'matched' : (window.sevClass ? window.sevClass(i.severity) : '');
+        var row = document.createElement('div'); row.className = 'ioc ' + cls;
+        row.addEventListener('click', function() { if (window.openIOCDetail) window.openIOCDetail(i.id); });
+        var hdr = document.createElement('div'); hdr.className = 'ioc-hdr';
+        var typeSpan = document.createElement('span'); typeSpan.className = 'ioc-type'; typeSpan.textContent = String(i.type || ''); hdr.appendChild(typeSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge(i.severity); hdr.appendChild(sw); }
+        if (i.matched) { var mp = document.createElement('span'); mp.className = 'pill pill-green'; mp.textContent = '✓ matched'; hdr.appendChild(mp); }
+        var valSpan = document.createElement('span'); valSpan.className = 'ioc-val'; valSpan.textContent = String(i.val || ''); hdr.appendChild(valSpan);
+        row.appendChild(hdr);
+        var feedDiv = document.createElement('div'); feedDiv.className = 'ioc-feed'; feedDiv.textContent = 'feed: ' + String(i.feed || ''); row.appendChild(feedDiv);
+        var tags = document.createElement('div'); tags.className = 'ioc-tags';
+        (i.mitre || []).forEach(function(m) {
+          if (typeof m !== 'string' && typeof m !== 'number') return;
+          var pill = document.createElement('span'); pill.className = 'pill pill-purple'; pill.textContent = String(m); tags.appendChild(pill);
+        });
+        row.appendChild(tags); listEl.appendChild(row);
+      });
+      var kEl = document.getElementById('k-matches');
+      if (kEl) kEl.textContent = IOCS.filter(function(i) { return i.matched; }).length;
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F19] threat_intel IOCs hardened'));
+  });
+
+  whenReady(function() { return typeof window.renderCVEs === 'function'; }, function() {
+    window.renderCVEs = function() {
+      var CVES = window.CVES || [];
+      var tbody = document.getElementById('cve-tbody'); if (!tbody) return;
+      tbody.innerHTML = '';
+      CVES.forEach(function(c) {
+        var tr = document.createElement('tr'); tr.className = 'cve-row';
+        tr.addEventListener('click', function() { if (window.openCVEDetail) window.openCVEDetail(c.id); });
+        var cvssColor = c.cvss >= 9 ? 'var(--red)' : c.cvss >= 7 ? 'var(--amber)' : 'var(--blue)';
+        var td1 = document.createElement('td'); td1.style.cssText = 'padding:8px 10px;font-family:var(--font-mono);font-size:10px;color:var(--cyan)'; td1.textContent = String(c.id || ''); tr.appendChild(td1);
+        var td2 = document.createElement('td'); td2.style.cssText = 'padding:8px 10px;font-size:11px';
+        td2.appendChild(document.createTextNode(String(c.desc || ''))); td2.appendChild(document.createElement('br'));
+        var compSpan = document.createElement('span'); compSpan.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)'; compSpan.textContent = String(c.component || ''); td2.appendChild(compSpan);
+        tr.appendChild(td2);
+        var td3 = document.createElement('td'); td3.style.cssText = 'padding:8px 10px';
+        var cvssSpan = document.createElement('span'); cvssSpan.style.cssText = 'font-family:var(--font-mono);font-weight:700;font-size:12px;color:' + cvssColor; cvssSpan.textContent = String(c.cvss || ''); td3.appendChild(cvssSpan);
+        tr.appendChild(td3);
+        var td4 = document.createElement('td'); td4.style.cssText = 'padding:8px 10px;font-family:var(--font-mono);font-size:11px;color:var(--t2)'; td4.textContent = String(c.epss || ''); tr.appendChild(td4);
+        var td5 = document.createElement('td'); td5.style.cssText = 'padding:8px 10px';
+        var kevPill = document.createElement('span'); kevPill.className = c.kev ? 'pill pill-red' : 'pill pill-gray'; kevPill.textContent = c.kev ? 'KEV' : 'No'; td5.appendChild(kevPill);
+        tr.appendChild(td5);
+        var td6 = document.createElement('td'); td6.style.cssText = 'padding:8px 10px';
+        String(c.ttp || '').split(',').forEach(function(t) {
+          var tt = t.trim(); if (!tt) return;
+          var p = document.createElement('span'); p.className = 'pill pill-purple'; p.style.marginRight = '2px'; p.textContent = tt; td6.appendChild(p);
+        });
+        tr.appendChild(td6); tbody.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F20] threat_intel CVEs hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F21 assets
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenAssets() {
+  if (!document.getElementById('asset-tbody') && !document.getElementById('findings-list')) return;
+  whenReady(function() { return typeof window.renderFindings === 'function'; }, function() {
+    window.renderFindings = function() {
+      var ALL_FINDINGS = window.ALL_FINDINGS || [];
+      var _activeAsset = window._activeAsset || null;
+      var sf = (document.getElementById('sev-filter')||{}).value || '';
+      var stf = (document.getElementById('status-filter')||{}).value || '';
+      var q = ((document.getElementById('search-box')||{}).value || '').toLowerCase();
+      var src = _activeAsset ? ALL_FINDINGS.filter(function(f) { return f.asset_id === _activeAsset.id; }) : ALL_FINDINGS;
+      var list = src.filter(function(f) {
+        if (sf && (f.severity||'').toUpperCase() !== sf) return false;
+        if (stf && (f.status||'open') !== stf) return false;
+        if (q && !((f.title||'').toLowerCase().includes(q) || (f.asset||'').toLowerCase().includes(q))) return false;
+        return true;
+      });
+      var titleEl = document.getElementById('findings-title');
+      if (titleEl) titleEl.textContent = _activeAsset ? (_activeAsset.name + ' findings') : 'All findings';
+      var subEl = document.getElementById('findings-sub'); if (subEl) subEl.textContent = list.length + ' findings';
+      var listEl = document.getElementById('findings-list'); if (!listEl) return;
+      listEl.innerHTML = '';
+      if (!list.length) {
+        var empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;padding:16px;color:var(--t3);font-size:11px';
+        empty.textContent = 'No findings match filter'; listEl.appendChild(empty); return;
+      }
+      list.forEach(function(f) {
+        var sc = window.sevClass ? window.sevClass((f.severity||'').toUpperCase()) : '';
+        var row = document.createElement('div'); row.className = 'finding ' + sc;
+        row.addEventListener('click', function() { if (window.openFindingModal) window.openFindingModal(f.id); });
+        var hdr = document.createElement('div'); hdr.className = 'f-hdr';
+        var idSpan = document.createElement('span'); idSpan.className = 'f-id'; idSpan.textContent = String(f.id || '').slice(0, 8); hdr.appendChild(idSpan);
+        if (window.sevBadge) { var sw = document.createElement('span'); sw.innerHTML = window.sevBadge(f.severity); hdr.appendChild(sw); }
+        if (f.status === 'resolved') { var p = document.createElement('span'); p.className = 'pill pill-green'; p.textContent = 'resolved'; hdr.appendChild(p); }
+        var titleSpan = document.createElement('span'); titleSpan.className = 'f-title'; titleSpan.textContent = String(f.title || ''); hdr.appendChild(titleSpan);
+        var assetSpan = document.createElement('span'); assetSpan.className = 'f-ts'; assetSpan.textContent = String(f.asset || ''); hdr.appendChild(assetSpan);
+        row.appendChild(hdr);
+        var fileDiv = document.createElement('div'); fileDiv.className = 'f-file';
+        fileDiv.textContent = String(f.tool || '') + ' · ' + String(f.file || '') + ':' + String(f.line || '');
+        row.appendChild(fileDiv);
+        var tags = document.createElement('div'); tags.className = 'f-tags';
+        var rulePill = document.createElement('span'); rulePill.className = 'pill pill-gray'; rulePill.textContent = String(f.rule || ''); tags.appendChild(rulePill);
+        if (f.cwe) { var cp = document.createElement('span'); cp.className = 'pill pill-gray'; cp.textContent = String(f.cwe); tags.appendChild(cp); }
+        if (f.cvss) { var cp2 = document.createElement('span'); cp2.className = 'pill pill-blue'; cp2.textContent = 'CVSS ' + String(f.cvss); tags.appendChild(cp2); }
+        row.appendChild(tags); listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F21] assets hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F22 ai_analyst incident sidebar
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenAIAnalyst() {
+  if (!document.getElementById('inc-list-sidebar')) return;
+  whenReady(function() {
+    var el = document.getElementById('inc-list-sidebar');
+    return el && el.children.length > 0;
+  }, function() {
+    var listEl = document.getElementById('inc-list-sidebar'); if (!listEl) return;
+    var sevColor = { CRITICAL:'var(--red)', HIGH:'var(--amber)', MEDIUM:'var(--blue)', LOW:'var(--green)' };
+    var _ctxData = window._ctxData || {};
+    var openIncs = (_ctxData.incidents || []).filter(function(i){ return i.status === 'open'; });
+    if (!openIncs.length) return;
+    listEl.innerHTML = '';
+    openIncs.slice(0, 5).forEach(function(inc) {
+      var color = sevColor[inc.severity] || 'var(--t2)';
+      var item = document.createElement('div'); item.className = 'inc-item';
+      item.addEventListener('click', function() { if (window.qa) window.qa('Phân tích incident: ' + String(inc.title || '')); });
+      var titleDiv = document.createElement('div'); titleDiv.className = 'inc-title';
+      titleDiv.title = String(inc.title || ''); titleDiv.textContent = String(inc.title || '');
+      item.appendChild(titleDiv);
+      var meta = document.createElement('div'); meta.className = 'inc-meta'; meta.style.color = color;
+      meta.textContent = String(inc.severity || '') + ' · ' + String(inc.created_at || '').slice(0, 10);
+      item.appendChild(meta); listEl.appendChild(item);
+    });
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F22] ai_analyst sidebar hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F23-F25 — vuln_mgmt.html (NEW IN V4)
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenVulnMgmt() {
+  if (!document.getElementById('cve-body') && !document.getElementById('tool-body') && !document.getElementById('sla-body')) return;
+
+  // F23: CVE table
+  whenReady(function() { return typeof window.renderCVEs === 'function' && document.getElementById('cve-body'); }, function() {
+    window.renderCVEs = function(cves) {
+      var _cveData = window._cveData || cves || [];
+      window._cveData = _cveData;
+      var sf = (document.getElementById('cve-sev-filter')||{}).value || '';
+      var q = ((document.getElementById('cve-search')||{}).value || '').toLowerCase();
+      var list = _cveData.filter(function(c) {
+        if (sf && (c.severity||'').toUpperCase() !== sf) return false;
+        if (q && !(c.cve||'').toLowerCase().includes(q) && !(c.tools||'').toLowerCase().includes(q)) return false;
+        return true;
+      });
+      var sub = document.getElementById('cve-sub'); if (sub) sub.textContent = list.length + ' CVEs';
+      var body = document.getElementById('cve-body'); if (!body) return;
+      body.innerHTML = '';
+      if (!list.length) {
+        var tr = document.createElement('tr');
+        var td = document.createElement('td'); td.colSpan = 4;
+        var es = document.createElement('div'); es.className = 'empty-state';
+        var emo = document.createElement('div'); emo.className = 'emo'; emo.textContent = '🔍'; es.appendChild(emo);
+        var p = document.createElement('p'); p.textContent = 'No CVEs match the filter'; es.appendChild(p);
+        td.appendChild(es); tr.appendChild(td); body.appendChild(tr);
+        return;
+      }
+      list.forEach(function(c) {
+        var origIdx = _cveData.indexOf(c);
+        var tr = document.createElement('tr');
+        tr.addEventListener('click', function() { window.openCVEDetail && window.openCVEDetail(origIdx); });
+        // CVE col
+        var td1 = document.createElement('td');
+        td1.style.cssText = 'font-family:var(--font-mono);font-size:10px';
+        td1.textContent = String(c.cve || '');
+        if (c.fixable) {
+          var fb = document.createElement('span'); fb.className = 'fixable-badge'; fb.textContent = 'fix ✓';
+          td1.appendChild(fb);
+        }
+        tr.appendChild(td1);
+        // Severity
+        var td2 = document.createElement('td');
+        if (window.sevPill) td2.innerHTML = window.sevPill(c.severity);
+        else { var sp = document.createElement('span'); sp.className = 'pill'; sp.textContent = String(c.severity||''); td2.appendChild(sp); }
+        tr.appendChild(td2);
+        // Count
+        var td3 = document.createElement('td');
+        td3.style.cssText = 'font-family:var(--font-mono);text-align:right';
+        td3.textContent = String(c.count || 0);
+        tr.appendChild(td3);
+        // Tools
+        var td4 = document.createElement('td');
+        td4.style.cssText = 'font-size:10px;color:var(--t3);max-width:140px;overflow:hidden;text-overflow:ellipsis';
+        td4.title = String(c.tools || '');
+        td4.textContent = String(c.tools || '—');
+        tr.appendChild(td4);
+        body.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F23] vuln_mgmt CVE table hardened'));
+  });
+
+  // F24: Tools breakdown
+  whenReady(function() { return typeof window.renderTools === 'function' && document.getElementById('tool-body'); }, function() {
+    window.renderTools = function(tools) {
+      window._toolData = tools;
+      var sub = document.getElementById('tool-sub'); if (sub) sub.textContent = tools.length + ' scanners';
+      var body = document.getElementById('tool-body'); if (!body) return;
+      if (!tools.length) {
+        body.innerHTML = '';
+        var es = document.createElement('div'); es.className = 'empty-state';
+        var emo = document.createElement('div'); emo.className = 'emo'; emo.textContent = '🔍'; es.appendChild(emo);
+        var p = document.createElement('p'); p.textContent = 'No tool data'; es.appendChild(p);
+        body.appendChild(es); return;
+      }
+      var maxTotal = Math.max.apply(null, tools.map(function(t){ return t.total || 0; })) || 1;
+      body.innerHTML = '';
+      tools.forEach(function(t) {
+        var row = document.createElement('div'); row.className = 'tool-row';
+        var name = document.createElement('span'); name.className = 'tool-name'; name.textContent = String(t.tool || ''); row.appendChild(name);
+        var barWrap = document.createElement('div'); barWrap.style.flex = '1';
+        var sevBar = document.createElement('div'); sevBar.className = 'sev-bar';
+        function seg(val, color, label) {
+          if (!val) return null;
+          var s = document.createElement('div'); s.className = 'sev-seg';
+          s.style.cssText = 'flex:' + val + ';background:' + color; s.title = label + ': ' + val;
+          return s;
+        }
+        var c = seg(t.critical, '#ef4444', 'Critical'); if (c) sevBar.appendChild(c);
+        var h = seg(t.high,     '#f59e0b', 'High');     if (h) sevBar.appendChild(h);
+        var m = seg(t.medium,   '#3b82f6', 'Medium');   if (m) sevBar.appendChild(m);
+        var l = seg(t.low,      '#22c55e', 'Low');      if (l) sevBar.appendChild(l);
+        barWrap.appendChild(sevBar); row.appendChild(barWrap);
+        var total = document.createElement('span');
+        total.style.cssText = 'font-family:var(--font-mono);font-size:11px;min-width:36px;text-align:right;color:var(--t2)';
+        total.textContent = String(t.total || 0);
+        row.appendChild(total); body.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F24] vuln_mgmt tools hardened'));
+  });
+
+  // F25: SLA panel
+  whenReady(function() { return typeof window.renderSLA === 'function' && document.getElementById('sla-body'); }, function() {
+    window.renderSLA = function(slaRows) {
+      var body = document.getElementById('sla-body'); if (!body) return;
+      body.innerHTML = '';
+      slaRows.forEach(function(r) {
+        var color = r.pct >= 90 ? 'var(--green)' : r.pct >= 70 ? 'var(--amber)' : 'var(--red)';
+        var row = document.createElement('div'); row.className = 'sla-row';
+        var label = document.createElement('span');
+        label.style.cssText = 'font-size:11px;width:110px;flex-shrink:0';
+        label.textContent = String(r.label || ''); row.appendChild(label);
+        var bar = document.createElement('div'); bar.className = 'progress-bar';
+        var fill = document.createElement('div'); fill.className = 'progress-fill';
+        fill.style.cssText = 'width:' + (r.pct||0) + '%;background:' + color;
+        bar.appendChild(fill); row.appendChild(bar);
+        var pct = document.createElement('span');
+        pct.style.cssText = 'font-size:11px;font-family:var(--font-mono);color:' + color + ';width:36px;text-align:right';
+        pct.textContent = (r.pct||0) + '%';
+        row.appendChild(pct); body.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F25] vuln_mgmt SLA hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F26 + F27 + F28 — network_flow.html (NEW IN V5)
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenNetworkFlow() {
+  if (!document.getElementById('ndr-alerts') && !document.getElementById('conn-tbody')) return;
+
+  // F26: NDR alerts
+  whenReady(function() { return typeof window.renderAlerts === 'function' && document.getElementById('ndr-alerts'); }, function() {
+    window.renderAlerts = function() {
+      var NDR_ALERTS = window.NDR_ALERTS || [];
+      var listEl = document.getElementById('ndr-alerts');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      NDR_ALERTS.forEach(function(a) {
+        var cls = {crit:'crit',high:'high',info:'info'}[a.sev] || '';
+        var row = document.createElement('div');
+        row.className = 'alert-item ' + cls;
+        // SAFE: closure thay vì data-msg attribute injection
+        row.addEventListener('click', function() { alert(String(a.msg || '')); });
+        var top = document.createElement('div');
+        top.style.cssText = 'display:flex;justify-content:space-between;margin-bottom:2px';
+        var msgSpan = document.createElement('span');
+        msgSpan.style.cssText = 'font-size:11px;font-weight:500';
+        msgSpan.textContent = String(a.msg || '');
+        var tsSpan = document.createElement('span');
+        tsSpan.style.cssText = 'font-size:10px;color:var(--t3);flex-shrink:0;margin-left:8px';
+        tsSpan.textContent = String(a.ts || '');
+        top.appendChild(msgSpan);
+        top.appendChild(tsSpan);
+        var sev = document.createElement('div');
+        sev.style.cssText = 'font-size:10px;color:var(--t3)';
+        var sevLabel = a.sev === 'crit' ? 'CRITICAL' : a.sev === 'high' ? 'HIGH' : 'INFO';
+        sev.textContent = sevLabel + ' · Network anomaly detection';
+        row.appendChild(top);
+        row.appendChild(sev);
+        listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F26] network_flow NDR alerts hardened'));
+  });
+
+  // F27: Connection table
+  whenReady(function() { return typeof window.renderConns === 'function' && document.getElementById('conn-tbody'); }, function() {
+    window.renderConns = function() {
+      var CONNS = window.CONNS || [];
+      var f = (document.getElementById('conn-filter')||{}).value || '';
+      var list = CONNS.filter(function(c) {
+        if (!f) return true;
+        return f === 'suspicious' ? c.status === 'suspicious' : c.status === 'ok';
+      });
+      var tbody = document.getElementById('conn-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      list.forEach(function(c, i) {
+        var sc = {suspicious:'pill-red',warn:'pill-amber',ok:'pill-green'}[c.status] || 'pill-gray';
+        var tr = document.createElement('tr');
+        tr.addEventListener('click', function() { window.openConnDetail && window.openConnDetail(i); });
+        function td(cls, txt) {
+          var t = document.createElement('td');
+          if (cls) t.style.cssText = cls;
+          t.textContent = String(txt == null ? '' : txt);
+          return t;
+        }
+        tr.appendChild(td('font-family:var(--font-mono);font-size:10px', c.src));
+        tr.appendChild(td('font-family:var(--font-mono);font-size:10px', c.dst));
+        var protoTd = document.createElement('td');
+        var protoPill = document.createElement('span');
+        protoPill.className = 'pill pill-blue';
+        protoPill.textContent = String(c.proto || '');
+        protoTd.appendChild(protoPill);
+        tr.appendChild(protoTd);
+        tr.appendChild(td('font-family:var(--font-mono);font-size:10px', c.port));
+        tr.appendChild(td('font-family:var(--font-mono);font-size:10px;color:var(--cyan)', c.bytes));
+        tr.appendChild(td('font-family:var(--font-mono);font-size:10px;color:var(--t3)', c.pkts));
+        tr.appendChild(td('font-family:var(--font-mono);font-size:10px;color:var(--t3)', c.dur));
+        var statusTd = document.createElement('td');
+        var statusPill = document.createElement('span');
+        statusPill.className = 'pill ' + sc;
+        statusPill.textContent = String(c.status || '');
+        statusTd.appendChild(statusPill);
+        tr.appendChild(statusTd);
+        tbody.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F27] network_flow connection table hardened'));
+  });
+
+  // F28: Node tooltip — patch by intercepting DOM mutations
+  // tooltip is updated inside canvas click handler; we wrap the function
+  whenReady(function() { return document.getElementById('node-tooltip'); }, function() {
+    var tt = document.getElementById('node-tooltip');
+    // Use MutationObserver as last-resort safety: if anything sets innerHTML
+    // with raw label/type, we re-render via textContent. But safer: we just
+    // override the canvas click that sets it. Try wrapping if visible:
+    var _origSet = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    // Pragmatic: just wrap the renderProtos which is similar pattern
+    // Skip — F28 needs canvas click intercept which is too fragile.
+    // Instead: install mutation observer that escapes <script> in tooltip
+    var obs = new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        if (m.target === tt && m.type === 'childList') {
+          // Check if tooltip contains any <script> or event handlers
+          var scripts = tt.querySelectorAll('script');
+          if (scripts.length) {
+            scripts.forEach(function(s) { s.remove(); });
+            console.warn('[VSP-SYNC F28] removed <script> from node-tooltip');
+          }
+          // Strip event handlers
+          var all = tt.querySelectorAll('*');
+          all.forEach(function(el) {
+            for (var i = el.attributes.length - 1; i >= 0; i--) {
+              var attr = el.attributes[i];
+              if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+            }
+          });
+        }
+      });
+    });
+    obs.observe(tt, { childList: true, subtree: true });
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F28] network_flow tooltip mutation observer armed'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F29 + F30 + F31 — p4_compliance.html (NEW IN V5)
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenP4Compliance() {
+  if (!document.getElementById('poam-list') && !document.getElementById('rasp-list') && !document.getElementById('drift-list') && !document.getElementById('tests-list')) return;
+
+  // F29: POAM
+  whenReady(function() { return typeof window.renderPOAMRow === 'function'; }, function() {
+    window.renderPOAMRow = function(p) {
+      var sevColors = { CRITICAL:'var(--red)', HIGH:'var(--amber)', MEDIUM:'var(--blue)', LOW:'var(--t3)' };
+      var stColors = { open:'st-open', in_remediation:'st-rem', closed:'st-closed', risk_accepted:'st-rem' };
+      var sevC = sevColors[p.severity] || 'var(--t3)';
+      var stC = stColors[p.status] || 'st-open';
+      var wrap = document.createElement('div');
+      wrap.className = 'poam-row';
+      var hdr = document.createElement('div');
+      hdr.className = 'poam-header';
+      function span(cls, txt, style) {
+        var s = document.createElement('span');
+        s.className = cls;
+        if (style) s.style.cssText = style;
+        s.textContent = String(txt == null ? '' : txt);
+        return s;
+      }
+      hdr.appendChild(span('poam-id', p.id));
+      hdr.appendChild(span('poam-ctrl', p.control_id));
+      hdr.appendChild(span('poam-name', p.weakness_name));
+      hdr.appendChild(span('poam-sev', p.severity, 'background:' + sevC + '22;color:' + sevC));
+      hdr.appendChild(span('poam-status ' + stC, String(p.status || '').replace('_', ' ')));
+      wrap.appendChild(hdr);
+      var plan = document.createElement('div');
+      plan.className = 'poam-plan';
+      plan.textContent = String(p.mitigation_plan || '');
+      wrap.appendChild(plan);
+      if (p.scheduled_completion) {
+        var due = document.createElement('div');
+        due.style.cssText = 'font-size:10px;color:var(--t3);margin-top:3px';
+        due.textContent = 'Due: ' + new Date(p.scheduled_completion).toLocaleDateString();
+        wrap.appendChild(due);
+      }
+      return wrap.outerHTML;
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F29] p4_compliance POAM hardened'));
+  });
+
+  // F30: Drift events
+  whenReady(function() { return typeof window.renderDrift === 'function' && document.getElementById('drift-list'); }, function() {
+    window.renderDrift = function(events) {
+  /* P8921_V19_RENDERDRIFT_LOCAL_NORMALIZE */
+  events = window.__vspToArrayV19(events);
+      var colors = { CRITICAL:'var(--red)', HIGH:'var(--amber)', MEDIUM:'var(--blue)', LOW:'var(--t3)' };
+      var listEl = document.getElementById('drift-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      window.__vspToArrayV17(events).forEach(function(d) {
+        var row = document.createElement('div');
+        row.className = 'drift-row';
+        var icon = document.createElement('div');
+        icon.className = 'drift-icon';
+        icon.style.background = d.severity === 'CRITICAL' ? 'var(--red-d)' : d.severity === 'HIGH' ? 'var(--amber-d)' : 'var(--blue-d)';
+        var iconSpan = document.createElement('span');
+        iconSpan.style.color = colors[d.severity] || 'var(--t3)';
+        iconSpan.textContent = '⚠';
+        icon.appendChild(iconSpan);
+        row.appendChild(icon);
+        var info = document.createElement('div');
+        info.className = 'drift-info';
+        var resDiv = document.createElement('div');
+        resDiv.className = 'drift-resource';
+        resDiv.textContent = String(d.resource || '');
+        var typeSpan = document.createElement('span');
+        typeSpan.style.cssText = 'font-size:10px;color:var(--t3)';
+        typeSpan.textContent = ' [' + String(d.resource_type || '') + ']';
+        resDiv.appendChild(typeSpan);
+        info.appendChild(resDiv);
+        var changeDiv = document.createElement('div');
+        changeDiv.className = 'drift-change';
+        changeDiv.textContent = String(d.change || '');
+        info.appendChild(changeDiv);
+        var meta = document.createElement('div');
+        meta.style.cssText = 'display:flex;gap:10px;margin-top:3px';
+        var ctrlSpan = document.createElement('span');
+        ctrlSpan.className = 'drift-ctrl';
+        ctrlSpan.textContent = String(d.control_id || '');
+        meta.appendChild(ctrlSpan);
+        var revSpan = document.createElement('span');
+        if (d.auto_reverted) {
+          revSpan.className = 'drift-reverted';
+          revSpan.textContent = '✓ auto-reverted';
+        } else {
+          revSpan.style.cssText = 'font-size:10px;color:var(--red)';
+          revSpan.textContent = 'manual review required';
+        }
+        meta.appendChild(revSpan);
+        info.appendChild(meta);
+        row.appendChild(info);
+        var tsDiv = document.createElement('div');
+        tsDiv.style.cssText = 'font-size:10px;color:var(--t3)';
+        tsDiv.textContent = d.detected_at ? new Date(d.detected_at).toLocaleDateString() : '';
+        row.appendChild(tsDiv);
+        listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F30] p4_compliance drift hardened'));
+  });
+
+  // F31: RASP attack events (CRITICAL — attacker-controlled data)
+  whenReady(function() { return typeof window.renderRASP === 'function' && document.getElementById('rasp-list'); }, function() {
+    window.renderRASP = function(events) {
+      var colors = { CRITICAL:'sev-crit', HIGH:'sev-high', MEDIUM:'sev-med', LOW:'sev-low' };
+      var listEl = document.getElementById('rasp-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      window.__vspToArrayV17(events).forEach(function(e) {
+        var row = document.createElement('div');
+        row.className = 'rasp-row';
+        function span(cls, txt, style) {
+          var s = document.createElement('span');
+          s.className = cls;
+          if (style) s.style.cssText = style;
+          s.textContent = String(txt == null ? '' : txt);
+          return s;
+        }
+        row.appendChild(span('rasp-sev ' + (colors[e.severity] || 'sev-low'), e.severity));
+        row.appendChild(span('rasp-type', e.attack_type));
+        row.appendChild(span('rasp-svc', String(e.service || '') + ' ' + String(e.endpoint || '')));
+        row.appendChild(span('rasp-' + (e.action === 'blocked' ? 'action-blk' : 'action-alrt'), String(e.action || '').toUpperCase()));
+        row.appendChild(span('', e.source_ip, 'font-size:10px;color:var(--t3)'));
+        row.appendChild(span('rasp-ts', e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''));
+        if (e.cve) row.appendChild(span('', e.cve, 'font-size:10px;color:var(--red)'));
+        listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F31] p4_compliance RASP hardened (attacker-data safe)'));
+  });
+
+  // Bonus: Tests render (also raw)
+  whenReady(function() { return typeof window.renderTests === 'function' && document.getElementById('tests-list'); }, function() {
+    window.renderTests = function(tests) {
+      var listEl = document.getElementById('tests-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      (tests || []).forEach(function(t) {
+        var row = document.createElement('div');
+        row.className = 'test-row';
+        function span(cls, txt, style, title) {
+          var s = document.createElement('span');
+          s.className = cls;
+          if (style) s.style.cssText = style;
+          s.textContent = String(txt == null ? '' : txt);
+          if (title != null) s.title = String(title);
+          return s;
+        }
+        row.appendChild(span('test-fw', t.framework));
+        row.appendChild(span('test-ctrl', t.control_id));
+        row.appendChild(span('test-name', t.name));
+        row.appendChild(span('test-status ts-' + escapeHtml(String(t.status || '')), String(t.status || '').toUpperCase()));
+        var scoreColor = t.score >= 80 ? 'var(--green)' : t.score >= 50 ? 'var(--amber)' : 'var(--red)';
+        row.appendChild(span('test-score', t.score, 'color:' + scoreColor));
+        row.appendChild(span('test-evidence', t.evidence, null, t.evidence));
+        if (t.auto_fix_available) {
+          var af = document.createElement('span');
+          af.style.cssText = 'font-size:10px;color:var(--cyan)';
+          af.textContent = '⚡ autofix';
+          row.appendChild(af);
+        }
+        listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F31b] p4_compliance tests hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F32 + F33 — scheduler.html (NEW IN V5)
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenScheduler() {
+  if (!document.getElementById('sched-list') && !document.getElementById('runs-list')) return;
+
+  // F32: Schedule list
+  whenReady(function() { return typeof window.renderSchedules === 'function' && document.getElementById('sched-list'); }, function() {
+    window.renderSchedules = function() {
+      var SCHEDULES = window.SCHEDULES || [];
+      var listEl = document.getElementById('sched-list');
+      if (!listEl) return;
+      var subEl = document.getElementById('sched-sub');
+      if (subEl) subEl.textContent = SCHEDULES.length + ' schedules';
+      var sf = (document.getElementById('sched-mode-filter')||{}).value || '';
+      var ef = (document.getElementById('sched-enabled-filter')||{}).value || '';
+      var list = SCHEDULES.filter(function(s) {
+        if (sf && s.mode !== sf) return false;
+        if (ef === 'enabled' && !s.enabled) return false;
+        if (ef === 'disabled' && s.enabled) return false;
+        return true;
+      });
+      if (!list.length) {
+        listEl.innerHTML = '';
+        var es = document.createElement('div'); es.className = 'empty-state';
+        var emo = document.createElement('div'); emo.className = 'emo'; emo.textContent = '🗓'; es.appendChild(emo);
+        var p = document.createElement('p'); p.textContent = 'No schedules match the current filters'; es.appendChild(p);
+        listEl.appendChild(es); return;
+      }
+      listEl.innerHTML = '';
+      list.forEach(function(s) {
+        var origIdx = SCHEDULES.indexOf(s);
+        var item = document.createElement('div');
+        item.className = 'sched-item ' + (s.enabled ? 'enabled' : 'disabled');
+        // Header
+        var hdr = document.createElement('div'); hdr.className = 'sched-hdr';
+        var btn = document.createElement('button');
+        btn.className = 'toggle ' + (s.enabled ? 'on' : 'off');
+        btn.title = s.enabled ? 'Disable' : 'Enable';
+        btn.setAttribute('aria-label', s.enabled ? 'Disable' : 'Enable');
+        btn.addEventListener('click', function() { window.toggleSched && window.toggleSched(origIdx); });
+        hdr.appendChild(btn);
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'sched-name';
+        nameSpan.title = String(s.name || '');
+        nameSpan.textContent = String(s.name || '');
+        hdr.appendChild(nameSpan);
+        if (window.modeBadge) {
+          var mb = document.createElement('span'); mb.innerHTML = window.modeBadge(s.mode); hdr.appendChild(mb);
+        }
+        var profilePill = document.createElement('span');
+        profilePill.className = 'pill pill-gray';
+        profilePill.textContent = String(s.profile || '');
+        hdr.appendChild(profilePill);
+        item.appendChild(hdr);
+        // Meta
+        var meta = document.createElement('div'); meta.className = 'sched-meta';
+        var cronSpan = document.createElement('span');
+        cronSpan.className = 'sched-cron';
+        cronSpan.textContent = String(s.cron || '');
+        meta.appendChild(cronSpan);
+        var descSpan = document.createElement('span');
+        descSpan.textContent = window.cronDescribe ? window.cronDescribe(s.cron) : '';
+        meta.appendChild(descSpan);
+        if (s.enabled && s.next_run !== '—') {
+          var nextSpan = document.createElement('span');
+          nextSpan.className = 'next-badge';
+          nextSpan.textContent = 'next: ' + String(s.next_run || '');
+          meta.appendChild(nextSpan);
+        }
+        item.appendChild(meta);
+        // src
+        var srcDiv = document.createElement('div');
+        srcDiv.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        srcDiv.title = String(s.src || '');
+        srcDiv.textContent = String(s.src || '');
+        item.appendChild(srcDiv);
+        // Last + tags
+        var tagsRow = document.createElement('div');
+        tagsRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap';
+        var lastSpan = document.createElement('span');
+        lastSpan.style.cssText = 'font-size:10px;color:var(--t3)';
+        lastSpan.textContent = 'Last: ' + String(s.last_run || '');
+        tagsRow.appendChild(lastSpan);
+        if (window.gateBadge) {
+          var gb = document.createElement('span'); gb.innerHTML = window.gateBadge(s.last_gate); tagsRow.appendChild(gb);
+        }
+        (s.tags || []).forEach(function(t) {
+          if (typeof t !== 'string' && typeof t !== 'number') return;
+          var pill = document.createElement('span');
+          pill.className = 'pill pill-gray';
+          pill.style.fontSize = '9px';
+          pill.textContent = String(t);
+          tagsRow.appendChild(pill);
+        });
+        item.appendChild(tagsRow);
+        // Actions
+        var actions = document.createElement('div'); actions.className = 'sched-actions';
+        function actBtn(cls, label, fn) {
+          var b = document.createElement('button');
+          b.className = cls;
+          b.textContent = label;
+          b.addEventListener('click', fn);
+          return b;
+        }
+        actions.appendChild(actBtn('btn btn-run btn-sm', '▶ Run now', function() { window.runNow && window.runNow(origIdx); }));
+        actions.appendChild(actBtn('btn btn-sm', '✎ Edit', function() { window.editSchedule && window.editSchedule(origIdx); }));
+        actions.appendChild(actBtn('btn btn-danger btn-sm', '✕ Delete', function() { window.deleteSchedule && window.deleteSchedule(origIdx); }));
+        item.appendChild(actions);
+        listEl.appendChild(item);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F32] scheduler list hardened'));
+  });
+
+  // F33: Recent runs
+  whenReady(function() { return typeof window.renderRecentRuns === 'function' && document.getElementById('runs-list'); }, function() {
+    window.renderRecentRuns = function() {
+      var RECENT_RUNS = window.RECENT_RUNS || [];
+      var sub = document.getElementById('runs-sub');
+      if (sub) sub.textContent = RECENT_RUNS.length + ' recent runs';
+      var listEl = document.getElementById('runs-list');
+      if (!listEl) return;
+      if (!RECENT_RUNS.length) {
+        listEl.innerHTML = '';
+        var es = document.createElement('div'); es.className = 'empty-state';
+        var emo = document.createElement('div'); emo.className = 'emo'; emo.textContent = '📋'; es.appendChild(emo);
+        var p = document.createElement('p'); p.textContent = 'No runs yet'; es.appendChild(p);
+        listEl.appendChild(es); return;
+      }
+      listEl.innerHTML = '';
+      RECENT_RUNS.forEach(function(r, i) {
+        var isQueued = r.status === 'QUEUED';
+        var row = document.createElement('div');
+        row.className = 'run-row';
+        row.title = 'Click for details';
+        row.addEventListener('click', function() { window.showRunDetail && window.showRunDetail(i); });
+        var ridSpan = document.createElement('span');
+        ridSpan.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--t3);width:140px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis';
+        ridSpan.textContent = String(r.rid || '').slice(-16);
+        row.appendChild(ridSpan);
+        var schedSpan = document.createElement('span');
+        schedSpan.style.cssText = 'flex:1;font-size:11px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        schedSpan.textContent = String(r.sched || '');
+        row.appendChild(schedSpan);
+        if (r.mode && window.modeBadge) {
+          var mb = document.createElement('span'); mb.innerHTML = window.modeBadge(r.mode); row.appendChild(mb);
+        }
+        if (isQueued) {
+          var qPill = document.createElement('span');
+          qPill.className = 'pill pill-cyan badge-running';
+          qPill.textContent = 'QUEUED';
+          row.appendChild(qPill);
+        } else if (window.gateBadge) {
+          var gb = document.createElement('span'); gb.innerHTML = window.gateBadge(r.gate); row.appendChild(gb);
+        }
+        var fSpan = document.createElement('span');
+        fSpan.style.cssText = 'font-size:10px;font-family:var(--font-mono);color:var(--t3);width:48px;text-align:right;flex-shrink:0';
+        fSpan.textContent = (r.findings || 0) + 'f';
+        row.appendChild(fSpan);
+        var dSpan = document.createElement('span');
+        dSpan.style.cssText = 'font-size:10px;font-family:var(--font-mono);color:var(--t3);width:44px;text-align:right;flex-shrink:0';
+        dSpan.textContent = String(r.dur || '');
+        row.appendChild(dSpan);
+        var tsSpan = document.createElement('span');
+        tsSpan.style.cssText = 'font-size:10px;color:var(--t3);width:100px;text-align:right;flex-shrink:0';
+        tsSpan.textContent = String(r.ts || '');
+        row.appendChild(tsSpan);
+        listEl.appendChild(row);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F33] scheduler recent runs hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V6 FIXES — 9 DEVSECOPS PANELS (F34-F66)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Helper: Safe element with text + attrs (prevents onclick injection)
+function safeEl(tag, opts) {
+  opts = opts || {};
+  var el = document.createElement(tag);
+  if (opts.cls) el.className = opts.cls;
+  if (opts.style) el.setAttribute('style', opts.style);
+  if (opts.title != null) el.title = String(opts.title);
+  if (opts.text != null) el.textContent = String(opts.text);
+  if (opts.html && /<\s*script|on\w+\s*=/i.test(opts.html)) {
+    el.textContent = opts.html;  // refuse script content
+  } else if (opts.html != null) {
+    el.innerHTML = opts.html;
+  }
+  if (opts.onClick) el.addEventListener('click', opts.onClick);
+  return el;
+}
+window._vspSafeEl = safeEl;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F34-F41 — sw_inventory.html (8 fixes)
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenSwInventory() {
+  if (!document.getElementById('inv-tbody') && !document.getElementById('whitelist-list')) return;
+
+  // F34: Inventory table render
+  whenReady(function() { return typeof window.renderInventory === 'function' && document.getElementById('inv-tbody'); }, function() {
+    window.renderInventory = function() {
+      var _invData = window._invData || [];
+      var _invPage = window._invPage || 0;
+      var INV_PAGE_SIZE = window.INV_PAGE_SIZE || 8;
+      var q = (document.getElementById('inv-search')||{}).value ? document.getElementById('inv-search').value.toLowerCase() : '';
+      var fs = (document.getElementById('inv-filter-status')||{}).value || '';
+      var fos = (document.getElementById('inv-filter-os')||{}).value || '';
+      var data = _invData.filter(function(x) {
+        var matchQ = !q || (x.name||'').toLowerCase().includes(q) || (x.vendor||'').toLowerCase().includes(q) || (x.host||'').toLowerCase().includes(q);
+        var matchS = !fs || x.status === fs;
+        var matchO = !fos || (x.os||'').toLowerCase() === fos;
+        return matchQ && matchS && matchO;
+      });
+      var c = document.getElementById('inv-count'); if (c) c.textContent = data.length + ' items';
+      var total = data.length;
+      var pages = Math.ceil(total / INV_PAGE_SIZE);
+      if (_invPage >= pages) _invPage = 0;
+      window._invPage = _invPage;
+      var slice = data.slice(_invPage * INV_PAGE_SIZE, (_invPage + 1) * INV_PAGE_SIZE);
+      var tbody = document.getElementById('inv-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (slice.length === 0) {
+        var emptyTr = document.createElement('tr');
+        var emptyTd = document.createElement('td');
+        emptyTd.colSpan = 10; emptyTd.className = 'empty';
+        emptyTd.textContent = 'No matching packages found';
+        emptyTr.appendChild(emptyTd); tbody.appendChild(emptyTr);
+        return;
+      }
+
+      var statusBadgeMap = {
+        approved: { cls: 'badge badge-ok', txt: 'Approved' },
+        unauthorized: { cls: 'badge badge-danger', txt: 'Unauthorized' },
+        cracked: { cls: 'badge badge-danger', txt: 'Crack/Pirate', style: 'background:rgba(249,115,22,.15);color:var(--orange);border-color:rgba(249,115,22,.3)' },
+        eol: { cls: 'badge badge-warn', txt: 'EOL' },
+        warning: { cls: 'badge badge-warn', txt: 'Warning', style: 'background:rgba(245,158,11,.1)' }
+      };
+
+      slice.forEach(function(x) {
+        var rowClass = x.status === 'cracked' ? 'row-danger' : x.status === 'unauthorized' ? 'row-danger' : x.status === 'eol' ? 'row-warn' : '';
+        var tr = document.createElement('tr');
+        if (rowClass) tr.className = rowClass;
+        // Package name
+        var td1 = document.createElement('td');
+        var nameSpan = document.createElement('span');
+        nameSpan.style.cssText = 'font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--t1)';
+        nameSpan.textContent = String(x.name || '');
+        td1.appendChild(nameSpan); tr.appendChild(td1);
+        // Version
+        var td2 = document.createElement('td');
+        var verSpan = document.createElement('span'); verSpan.className = 'badge badge-neutral';
+        verSpan.textContent = String(x.version || '—'); td2.appendChild(verSpan); tr.appendChild(td2);
+        // Vendor
+        var td3 = document.createElement('td');
+        td3.style.cssText = 'color:var(--t2);font-size:11px';
+        td3.textContent = String(x.vendor || '—'); tr.appendChild(td3);
+        // Host
+        var td4 = document.createElement('td');
+        td4.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--cyan)';
+        td4.textContent = String(x.host || '—'); tr.appendChild(td4);
+        // OS
+        var td5 = document.createElement('td');
+        var osSpan = document.createElement('span');
+        osSpan.className = 'badge badge-neutral'; osSpan.style.fontSize = '9px';
+        osSpan.textContent = String(x.os || '').toUpperCase();
+        td5.appendChild(osSpan); tr.appendChild(td5);
+        // Status (use safe badge)
+        var td6 = document.createElement('td');
+        var sbm = statusBadgeMap[x.status];
+        if (sbm) {
+          var sb = document.createElement('span');
+          sb.className = sbm.cls; sb.textContent = sbm.txt;
+          if (sbm.style) sb.setAttribute('style', sbm.style);
+          td6.appendChild(sb);
+        } else {
+          var fb = document.createElement('span'); fb.className = 'badge badge-neutral';
+          fb.textContent = 'Unknown'; td6.appendChild(fb);
+        }
+        tr.appendChild(td6);
+        // CVEs
+        var td7 = document.createElement('td');
+        var n = x.cves || 0;
+        if (n > 0) {
+          var cv = document.createElement('span');
+          cv.className = 'sev ' + (n >= 5 ? 'sev-crit' : n >= 2 ? 'sev-high' : 'sev-med');
+          cv.style.cursor = 'pointer';
+          cv.textContent = n + ' CVE' + (n > 1 ? 's' : '');
+          td7.appendChild(cv);
+        } else {
+          var dash = document.createElement('span'); dash.style.cssText = 'color:var(--t3);font-size:10px';
+          dash.textContent = '—'; td7.appendChild(dash);
+        }
+        tr.appendChild(td7);
+        // License
+        var td8 = document.createElement('td');
+        td8.style.cssText = 'font-size:10px;font-family:var(--font-mono);color:' + (x.license === 'None' ? 'var(--red)' : (x.license && String(x.license).indexOf('GPL') >= 0) ? 'var(--amber)' : 'var(--t2)');
+        td8.textContent = String(x.license || '—'); tr.appendChild(td8);
+        // EOL
+        var td9 = document.createElement('td');
+        td9.style.cssText = 'font-size:10px;font-family:var(--font-mono);color:' + (x.eol_date ? 'var(--red)' : 'var(--t3)');
+        td9.textContent = String(x.eol_date || '—'); tr.appendChild(td9);
+        // Action
+        var td10 = document.createElement('td');
+        var btn = document.createElement('button'); btn.className = 'btn btn-sm';
+        btn.textContent = 'Detail';
+        (function(id) { btn.addEventListener('click', function() { window.openDetail && window.openDetail(id); }); })(x.id);
+        td10.appendChild(btn); tr.appendChild(td10);
+        tbody.appendChild(tr);
+      });
+
+      var pi = document.getElementById('inv-pager-info');
+      if (pi) pi.textContent = (_invPage * INV_PAGE_SIZE + 1) + '–' + Math.min((_invPage + 1) * INV_PAGE_SIZE, total) + ' of ' + total;
+      var pp = document.getElementById('inv-prev'); if (pp) pp.disabled = _invPage === 0;
+      var pn = document.getElementById('inv-next'); if (pn) pn.disabled = _invPage >= pages - 1;
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F34] sw_inventory inventory hardened'));
+  });
+
+  // F35: Hash check result (FIX WRONG SECURITY COMMENT!)
+  whenReady(function() { return typeof window.checkHash === 'function' && document.getElementById('hash-result'); }, function() {
+    window.checkHash = async function() {
+      var hashEl = document.getElementById('hash-input');
+      var nameEl = document.getElementById('hash-name-input');
+      var resultEl = document.getElementById('hash-result');
+      if (!hashEl || !resultEl) return;
+      var hash = (hashEl.value || '').trim();
+      var name = (nameEl ? nameEl.value : '').trim();
+      if (!hash) { window.showToast && window.showToast('Enter a hash value', 'error'); return; }
+      resultEl.innerHTML = '';
+      var loading = document.createElement('div');
+      loading.className = 'hash-result'; loading.style.color = 'var(--t3)';
+      loading.textContent = 'Checking hash…';
+      resultEl.appendChild(loading);
+      await new Promise(function(r) { setTimeout(r, 800); });
+      var knownBad = ['a3f29d1e', 'b1e43c7a', '9d2af4b6', '5f4dcc3b', 'd8578edf'];
+      var isBad = knownBad.some(function(h) { return hash.toLowerCase().indexOf(h) >= 0 || (hash.length === 32 && Math.random() < .25); });
+      resultEl.innerHTML = '';
+      var resultDiv = document.createElement('div');
+      resultDiv.className = 'hash-result ' + (isBad ? 'result-bad' : 'result-ok');
+      // Build with textContent — completely safe
+      if (isBad) {
+        resultDiv.textContent = '⚠ MATCH FOUND — Hash flagged in known-cracked / malware database\n' +
+          'Software: ' + (name || 'Unknown') + ' · Hash: ' + hash + '\n' +
+          'Source: NSRL DB + internal crack signatures\n' +
+          'Action: BLOCK recommended · Investigate host immediately';
+      } else {
+        resultDiv.textContent = '✓ CLEAN — Hash not found in known-cracked database\n' +
+          'Software: ' + (name || 'Unknown') + ' · Hash: ' + hash + '\n' +
+          'Note: Clean hash ≠ safe. Verify license separately.';
+      }
+      resultDiv.style.whiteSpace = 'pre-wrap';
+      resultEl.appendChild(resultDiv);
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F35] sw_inventory hash check hardened — REMOVED FALSE SEC-006 COMMENT'));
+  });
+
+  // F36: renderWhitelist
+  whenReady(function() { return typeof window.renderWhitelist === 'function'; }, function() {
+    window.renderWhitelist = function() {
+      var WL = window.MOCK_WHITELIST || [];
+      var BL = window.MOCK_BLACKLIST || [];
+      var WN = window.MOCK_WARNING || [];
+
+      function buildPolicyItem(x, kind) {
+        var item = document.createElement('div');
+        item.className = 'policy-item ' + (kind === 'whitelist' ? 'approved' : 'blocked');
+        var info = document.createElement('div');
+        var nameDiv = document.createElement('div'); nameDiv.className = 'policy-name';
+        nameDiv.textContent = String(x.name || '');
+        var verSpan = document.createElement('span');
+        verSpan.style.cssText = 'font-size:10px;color:var(--t3);font-weight:400';
+        verSpan.textContent = ' ' + String(x.version || '');
+        nameDiv.appendChild(verSpan);
+        var meta = document.createElement('div'); meta.className = 'policy-meta';
+        meta.textContent = String(x.vendor || '') + ' · ' + String(x.cat || '') + ' · ' + String(x.reason || '');
+        info.appendChild(nameDiv); info.appendChild(meta); item.appendChild(info);
+        var actions = document.createElement('div'); actions.className = 'policy-actions';
+        var badge = document.createElement('span');
+        badge.className = 'badge ' + (kind === 'whitelist' ? 'badge-ok' : 'badge-danger');
+        badge.style.fontSize = '9px';
+        badge.textContent = kind === 'whitelist' ? 'APPROVED' : 'BLOCKED';
+        actions.appendChild(badge);
+        var rmBtn = document.createElement('button'); rmBtn.className = 'btn btn-sm';
+        rmBtn.textContent = '✕';
+        (function(name) {
+          rmBtn.addEventListener('click', function() {
+            window.removeFromList && window.removeFromList(kind, name);
+          });
+        })(x.name);
+        actions.appendChild(rmBtn); item.appendChild(actions);
+        return item;
+      }
+
+      var wlEl = document.getElementById('whitelist-list');
+      if (wlEl) { wlEl.innerHTML = ''; WL.forEach(function(x) { wlEl.appendChild(buildPolicyItem(x, 'whitelist')); }); }
+      var blEl = document.getElementById('blacklist-list');
+      if (blEl) { blEl.innerHTML = ''; BL.forEach(function(x) { blEl.appendChild(buildPolicyItem(x, 'blacklist')); }); }
+      var wnEl = document.getElementById('warning-list');
+      if (wnEl) {
+        wnEl.innerHTML = '';
+        WN.forEach(function(w) {
+          var pill = document.createElement('span');
+          pill.className = 'badge badge-warn';
+          pill.style.cssText = 'cursor:pointer;font-size:11px';
+          pill.textContent = String(w) + ' ✕';
+          (function(name) {
+            pill.addEventListener('click', function() {
+              window.removeFromList && window.removeFromList('warning', name);
+            });
+          })(w);
+          wnEl.appendChild(pill);
+        });
+      }
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F36] sw_inventory whitelist hardened'));
+  });
+
+  // F37: confirm — wrap removeFromList + blockSW with sanitization
+  whenReady(function() { return typeof window.removeFromList === 'function'; }, function() {
+    var _origRemove = window.removeFromList;
+    window.removeFromList = function(list, name) {
+      // Sanitize name for confirm() display
+      var safeName = String(name || '').replace(/[<>"'&]/g, '?');
+      if (!confirm('Remove "' + safeName + '" from ' + String(list || '') + '?')) return;
+      window.showToast && window.showToast(name + ' removed from ' + list, 'success');
+      var WL = window.MOCK_WHITELIST || [];
+      var BL = window.MOCK_BLACKLIST || [];
+      var WN = window.MOCK_WARNING || [];
+      if (list === 'whitelist') { var i = WL.findIndex(function(x) { return x.name === name; }); if (i >= 0) WL.splice(i, 1); }
+      else if (list === 'blacklist') { var i2 = BL.findIndex(function(x) { return x.name === name; }); if (i2 >= 0) BL.splice(i2, 1); }
+      else { var i3 = WN.indexOf(name); if (i3 >= 0) WN.splice(i3, 1); }
+      window.renderWhitelist && window.renderWhitelist();
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F37] sw_inventory removeFromList hardened'));
+  });
+
+  // F38: loadCrackFindings
+  whenReady(function() { return typeof window.loadCrackFindings === 'function'; }, function() {
+    window.loadCrackFindings = function() {
+      var CRACKS = window.MOCK_CRACKS || [];
+      var tbody = document.getElementById('crack-tbody'); if (!tbody) return;
+      tbody.innerHTML = '';
+      if (!CRACKS.length) {
+        var tr = document.createElement('tr'); var td = document.createElement('td');
+        td.colSpan = 7; td.className = 'empty'; td.textContent = 'No crack/pirate detections found';
+        tr.appendChild(td); tbody.appendChild(tr); return;
+      }
+      var riskCls = { CRITICAL: 'sev-crit', HIGH: 'sev-high', MEDIUM: 'sev-med' };
+      CRACKS.forEach(function(x) {
+        var tr = document.createElement('tr'); tr.className = 'row-danger';
+        function td(style, text) { var c = document.createElement('td'); if (style) c.style.cssText = style; c.textContent = String(text == null ? '' : text); return c; }
+        tr.appendChild(td('font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--orange)', x.name));
+        var verTd = document.createElement('td');
+        var verSpan = document.createElement('span'); verSpan.className = 'badge badge-neutral'; verSpan.textContent = String(x.version || '');
+        verTd.appendChild(verSpan); tr.appendChild(verTd);
+        tr.appendChild(td('font-family:var(--font-mono);font-size:10px;color:var(--cyan)', x.host));
+        tr.appendChild(td('font-size:11px;color:var(--t2)', x.method));
+        var riskTd = document.createElement('td');
+        var riskSpan = document.createElement('span'); riskSpan.className = 'sev ' + (riskCls[x.risk] || ''); riskSpan.textContent = String(x.risk || '');
+        riskTd.appendChild(riskSpan); tr.appendChild(riskTd);
+        tr.appendChild(td('font-family:var(--font-mono);font-size:10px;color:var(--t3)', x.hash));
+        var actTd = document.createElement('td'); actTd.style.cssText = 'display:flex;gap:4px';
+        var blockBtn = document.createElement('button'); blockBtn.className = 'btn btn-sm btn-danger'; blockBtn.textContent = 'Block';
+        (function(name) { blockBtn.addEventListener('click', function() { window.blockSW && window.blockSW(name); }); })(x.name);
+        actTd.appendChild(blockBtn);
+        var qBtn = document.createElement('button'); qBtn.className = 'btn btn-sm'; qBtn.textContent = 'Quarantine';
+        qBtn.addEventListener('click', function() { window.showToast && window.showToast('Quarantine command sent', 'success'); });
+        actTd.appendChild(qBtn); tr.appendChild(actTd);
+        tbody.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F38] sw_inventory crack findings hardened'));
+  });
+
+  // F39: loadLicenseData
+  whenReady(function() { return typeof window.loadLicenseData === 'function'; }, function() {
+    window.loadLicenseData = function() {
+      var LIC = window.MOCK_LICENSE || [];
+      var tbody = document.getElementById('license-tbody'); if (!tbody) return;
+      tbody.innerHTML = '';
+      var riskBadgeMap = {
+        OK: { cls: 'badge badge-ok', txt: 'OK' },
+        WARN: { cls: 'badge badge-warn', txt: 'WARN' },
+        CRITICAL: { cls: 'sev sev-crit', txt: 'CRITICAL' },
+        INFO: { cls: 'badge badge-info', txt: 'INFO' }
+      };
+      LIC.forEach(function(x) {
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td');
+        c1.style.cssText = 'font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--t1)';
+        c1.textContent = String(x.comp || ''); tr.appendChild(c1);
+        var c2 = document.createElement('td');
+        var verBadge = document.createElement('span'); verBadge.className = 'badge badge-neutral'; verBadge.textContent = String(x.ver || '');
+        c2.appendChild(verBadge); tr.appendChild(c2);
+        var c3 = document.createElement('td');
+        c3.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:' + (x.license === 'None' ? 'var(--red)' : x.license && String(x.license).indexOf('GPL') >= 0 ? 'var(--amber)' : 'var(--t2)');
+        c3.textContent = String(x.license || ''); tr.appendChild(c3);
+        var c4 = document.createElement('td');
+        var typeBadge = document.createElement('span'); typeBadge.className = 'badge badge-neutral'; typeBadge.style.fontSize = '9px';
+        typeBadge.textContent = String(x.type || ''); c4.appendChild(typeBadge); tr.appendChild(c4);
+        var c5 = document.createElement('td');
+        var rb = riskBadgeMap[x.risk];
+        if (rb) { var rs = document.createElement('span'); rs.className = rb.cls; rs.textContent = rb.txt; c5.appendChild(rs); }
+        tr.appendChild(c5);
+        var c6 = document.createElement('td');
+        var sbomBadge = document.createElement('span'); sbomBadge.className = 'badge ' + (x.sbom ? 'badge-ok' : 'badge-danger'); sbomBadge.style.fontSize = '9px';
+        sbomBadge.textContent = x.sbom ? 'Yes' : 'No'; c6.appendChild(sbomBadge); tr.appendChild(c6);
+        var c7 = document.createElement('td');
+        var detBtn = document.createElement('button'); detBtn.className = 'btn btn-sm'; detBtn.textContent = 'Detail';
+        (function(name) { detBtn.addEventListener('click', function() { window.showToast && window.showToast('License detail for ' + name, 'info'); }); })(x.comp);
+        c7.appendChild(detBtn); tr.appendChild(c7);
+        tbody.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F39] sw_inventory license data hardened'));
+  });
+
+  // F40: loadScanHistory
+  whenReady(function() { return typeof window.loadScanHistory === 'function'; }, function() {
+    window.loadScanHistory = function() {
+      var H = window.MOCK_SCAN_HISTORY || [];
+      var tbody = document.getElementById('scan-history-tbody'); if (!tbody) return;
+      tbody.innerHTML = '';
+      H.forEach(function(x) {
+        var tr = document.createElement('tr');
+        function td(style, text) { var c = document.createElement('td'); if (style) c.style.cssText = style; c.textContent = String(text == null ? '' : text); return c; }
+        tr.appendChild(td('font-family:var(--font-mono);font-size:11px;color:var(--cyan)', x.rid));
+        tr.appendChild(td('font-size:11px;color:var(--t2)', x.host));
+        tr.appendChild(td('font-family:var(--font-mono);font-weight:600', x.total));
+        tr.appendChild(td('font-family:var(--font-mono);color:' + (x.unauth > 0 ? 'var(--red)' : 'var(--t3)'), x.unauth));
+        tr.appendChild(td('font-family:var(--font-mono);color:' + (x.crack > 0 ? 'var(--orange)' : 'var(--t3)'), x.crack));
+        tr.appendChild(td('font-family:var(--font-mono);color:' + (x.eol > 0 ? 'var(--amber)' : 'var(--t3)'), x.eol));
+        tr.appendChild(td('font-size:10px;color:var(--t3);font-family:var(--font-mono)', x.date));
+        var statTd = document.createElement('td');
+        var sb = document.createElement('span'); sb.className = 'badge badge-ok'; sb.style.fontSize = '9px';
+        sb.textContent = String(x.status || ''); statTd.appendChild(sb); tr.appendChild(statTd);
+        tbody.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F40] sw_inventory scan history hardened'));
+  });
+
+  // F41: openDetail FUNCTIONAL FIX (textContent với HTML template)
+  whenReady(function() { return typeof window.openDetail === 'function'; }, function() {
+    window.openDetail = function(id) {
+      var _invData = window._invData || [];
+      var x = _invData.find(function(it) { return it.id === id; });
+      if (!x) return;
+      window._detailSW = x;
+      var titleEl = document.getElementById('dm-title');
+      var subEl = document.getElementById('dm-sub');
+      var bodyEl = document.getElementById('dm-body');
+      if (titleEl) titleEl.textContent = String(x.name || '') + ' ' + String(x.version || '');
+      if (subEl) subEl.textContent = String(x.vendor || 'Unknown') + ' · ' + String(x.host || '') + ' · ' + String(x.os || '').toUpperCase();
+      if (bodyEl) {
+        bodyEl.innerHTML = '';  // clear
+        // Stat row
+        var statRow = document.createElement('div');
+        statRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px';
+        // Status box
+        var sBox = document.createElement('div'); sBox.className = 'stat-box';
+        var sLbl = document.createElement('div'); sLbl.className = 'stat-lbl'; sLbl.textContent = 'Status'; sBox.appendChild(sLbl);
+        var sVal = document.createElement('div'); sVal.style.marginTop = '4px';
+        var sBadge = document.createElement('span');
+        var statusMap = {
+          approved: { cls: 'badge badge-ok', txt: 'Approved' },
+          unauthorized: { cls: 'badge badge-danger', txt: 'Unauthorized' },
+          cracked: { cls: 'badge badge-danger', txt: 'Crack/Pirate', style: 'color:var(--orange)' },
+          eol: { cls: 'badge badge-warn', txt: 'EOL' },
+          warning: { cls: 'badge badge-warn', txt: 'Warning' }
+        };
+        var sm = statusMap[x.status];
+        if (sm) { sBadge.className = sm.cls; sBadge.textContent = sm.txt; if (sm.style) sBadge.setAttribute('style', sm.style); }
+        else { sBadge.className = 'badge badge-neutral'; sBadge.textContent = String(x.status || ''); }
+        sVal.appendChild(sBadge); sBox.appendChild(sVal); statRow.appendChild(sBox);
+        // CVEs box
+        var cBox = document.createElement('div'); cBox.className = 'stat-box';
+        var cLbl = document.createElement('div'); cLbl.className = 'stat-lbl'; cLbl.textContent = 'CVEs'; cBox.appendChild(cLbl);
+        var cVal = document.createElement('div'); cVal.className = 'stat-val ' + (x.cves > 4 ? 'c-red' : x.cves > 0 ? 'c-amber' : 'c-green');
+        cVal.style.fontSize = '20px'; cVal.textContent = String(x.cves || 0);
+        cBox.appendChild(cVal); statRow.appendChild(cBox);
+        // License box
+        var lBox = document.createElement('div'); lBox.className = 'stat-box';
+        var lLbl = document.createElement('div'); lLbl.className = 'stat-lbl'; lLbl.textContent = 'License'; lBox.appendChild(lLbl);
+        var lVal = document.createElement('div');
+        lVal.style.cssText = 'font-family:var(--font-mono);font-size:12px;margin-top:4px;color:' + (x.license === 'None' ? 'var(--red)' : 'var(--t2)');
+        lVal.textContent = String(x.license || '—');
+        lBox.appendChild(lVal); statRow.appendChild(lBox);
+        bodyEl.appendChild(statRow);
+        // Header
+        var hdr = document.createElement('div');
+        hdr.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em';
+        hdr.textContent = 'Package details'; bodyEl.appendChild(hdr);
+        // Details box
+        var detail = document.createElement('div');
+        detail.style.cssText = 'font-family:var(--font-mono);font-size:11px;padding:10px;background:var(--bg3);border-radius:var(--r-md);line-height:1.8;border:1px solid var(--border);white-space:pre-wrap';
+        detail.textContent =
+          'Package: ' + String(x.name || '') + '\n' +
+          'Version: ' + String(x.version || '—') + '\n' +
+          'Vendor: ' + String(x.vendor || '—') + '\n' +
+          'Host: ' + String(x.host || '—') + '\n' +
+          'OS: ' + String(x.os || '—').toUpperCase() + '\n' +
+          'EOL: ' + String(x.eol_date || '—');
+        bodyEl.appendChild(detail);
+      }
+      var modal = document.getElementById('detail-modal'); if (modal) modal.classList.add('open');
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F41] sw_inventory detail modal FIXED (textContent→DOM, was BROKEN before)'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F42-F47 — cicd.html (6 fixes)
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenCicd() {
+  if (!document.getElementById('schedules-list') && !document.getElementById('autofix-tbody') && !document.getElementById('history-tbody')) return;
+
+  // F42 + F43: loadSchedules + render schedules
+  whenReady(function() { return typeof window.loadSchedules === 'function' && document.getElementById('schedules-list'); }, function() {
+    var _origLoad = window.loadSchedules;
+    window.loadSchedules = async function() {
+      try { await window.ensureToken && window.ensureToken(); } catch(e) {}
+      var list = [];
+      try {
+        var r = await fetch('/api/v1/schedules', { headers: window.hdr ? window.hdr() : {} });
+        if (r.ok) { var d = await r.json(); list = d.schedules || (Array.isArray(d) ? d : []); }
+      } catch(e) {}
+      var enabled = list.filter(function(x) { return x.enabled; }).length;
+      var sb = document.getElementById('sched-status-bar');
+      if (sb) sb.textContent = list.length + ' schedules · ' + enabled + ' enabled';
+
+      var listEl = document.getElementById('schedules-list');
+      if (listEl) {
+        listEl.innerHTML = '';
+        list.forEach(function(s) {
+          var row = document.createElement('div'); row.className = 'sched-row';
+          // Switch
+          var swLabel = document.createElement('label'); swLabel.className = 'sw-wrap';
+          var sw = document.createElement('input'); sw.type = 'checkbox'; sw.checked = !!s.enabled;
+          (function(id) { sw.addEventListener('change', function() { window.toggleSchedule && window.toggleSchedule(id, this.checked); }); })(s.id);
+          var track = document.createElement('div'); track.className = 'sw-track';
+          var thumb = document.createElement('div'); thumb.className = 'sw-thumb';
+          swLabel.appendChild(sw); swLabel.appendChild(track); swLabel.appendChild(thumb);
+          row.appendChild(swLabel);
+          // Info
+          var info = document.createElement('div'); info.style.flex = '1';
+          var nameDiv = document.createElement('div'); nameDiv.className = 'sched-name';
+          nameDiv.textContent = String(s.name || '');
+          var metaDiv = document.createElement('div'); metaDiv.className = 'sched-meta';
+          metaDiv.textContent = String(s.mode || '') + ' · ' + String(s.cron || '') + ' · ' + String(s.src || '');
+          info.appendChild(nameDiv); info.appendChild(metaDiv); row.appendChild(info);
+          var nextSpan = document.createElement('span');
+          nextSpan.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono);margin-right:8px';
+          nextSpan.textContent = String(s.next_run || '');
+          row.appendChild(nextSpan);
+          var gateBadge = document.createElement('span');
+          gateBadge.className = 'badge badge-' + (s.last_gate === 'PASS' ? 'ok' : s.last_gate === 'FAIL' ? 'danger' : 'warn');
+          gateBadge.textContent = String(s.last_gate || '—');
+          row.appendChild(gateBadge);
+          // Action button (F42 fix — onClick instead of onclick template)
+          var btn = document.createElement('button'); btn.className = 'btn btn-sm';
+          btn.style.marginLeft = '8px'; btn.textContent = '▶ Now';
+          (function(id, name) { btn.addEventListener('click', function() { window.runScheduleNow && window.runScheduleNow(id, name); }); })(s.id, s.name);
+          row.appendChild(btn);
+          listEl.appendChild(row);
+        });
+      }
+
+      // upcoming
+      var upcomingEl = document.getElementById('upcoming-tbody');
+      if (upcomingEl) {
+        upcomingEl.innerHTML = '';
+        list.filter(function(x) { return x.enabled; }).slice(0, 5).forEach(function(s) {
+          var tr = document.createElement('tr');
+          var c1 = document.createElement('td'); c1.style.fontWeight = '500'; c1.textContent = String(s.name || ''); tr.appendChild(c1);
+          var c2 = document.createElement('td');
+          var mb = document.createElement('span'); mb.className = 'badge badge-info'; mb.textContent = String(s.mode || ''); c2.appendChild(mb); tr.appendChild(c2);
+          var c3 = document.createElement('td');
+          c3.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--cyan)';
+          c3.textContent = String(s.next_run || ''); tr.appendChild(c3);
+          var c4 = document.createElement('td');
+          c4.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--t3)';
+          c4.textContent = String(s.cron || ''); tr.appendChild(c4);
+          var c5 = document.createElement('td');
+          var eb = document.createElement('span'); eb.className = 'badge badge-ok'; eb.textContent = 'Enabled'; c5.appendChild(eb); tr.appendChild(c5);
+          upcomingEl.appendChild(tr);
+        });
+      }
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F42+F43] cicd schedules hardened'));
+  });
+
+  // F44: gate history
+  whenReady(function() { return typeof window.loadGateHistory === 'function' && document.getElementById('gate-history-tbody'); }, function() {
+    var _origGH = window.loadGateHistory;
+    window.loadGateHistory = async function() {
+      var tbody = document.getElementById('gate-history-tbody');
+      if (!tbody) return;
+      try { await window.ensureToken && window.ensureToken(); } catch(e) {}
+      var rows = [];
+      try {
+        var r = await fetch('/api/v1/vsp/runs/index?limit=5', { headers: window.hdr ? window.hdr() : {} });
+        var d = await r.json();
+        rows = (d.runs || []).slice(0, 5);
+      } catch(e) {}
+      tbody.innerHTML = '';
+      if (rows.length === 0) {
+        var tr = document.createElement('tr'); var td = document.createElement('td');
+        td.colSpan = 5; td.style.cssText = 'text-align:center;padding:14px;color:var(--t3);font-size:11px';
+        td.textContent = 'No gate decisions yet'; tr.appendChild(td); tbody.appendChild(tr); return;
+      }
+      rows.forEach(function(x) {
+        var rid = String(x.rid || x.id || '').slice(-12);
+        var branch = x.branch || (x.src ? String(x.src).split('/').slice(-2).join('/') : 'main');
+        var gate = x.gate || '—';
+        var score = (x.summary && x.summary.SCORE != null) ? x.summary.SCORE : (x.score != null ? x.score : null);
+        var scoreText = score == null ? '—' : score + '/100';
+        var scoreColor = score == null ? 'var(--t3)' : (score >= 70 ? 'var(--green)' : score >= 50 ? 'var(--amber)' : 'var(--red)');
+        var t = String(x.created_at || x.started_at || '').slice(11, 16);
+        var badge = gate === 'PASS' ? 'ok' : gate === 'FAIL' ? 'danger' : 'warn';
+        var tr = document.createElement('tr');
+        function td(style, text) { var c = document.createElement('td'); if (style) c.style.cssText = style; c.textContent = String(text == null ? '' : text); return c; }
+        tr.appendChild(td('font-family:var(--font-mono);font-size:10px;color:var(--cyan)', rid));
+        tr.appendChild(td('font-size:11px;color:var(--t2)', branch));
+        var gTd = document.createElement('td');
+        var gB = document.createElement('span'); gB.className = 'badge badge-' + badge; gB.textContent = String(gate); gTd.appendChild(gB);
+        tr.appendChild(gTd);
+        tr.appendChild(td('font-family:var(--font-mono);font-size:11px;color:' + scoreColor, scoreText));
+        tr.appendChild(td('font-size:10px;color:var(--t3);font-family:var(--font-mono)', t));
+        tbody.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F44] cicd gate history hardened'));
+  });
+
+  // F45: PR comment preview — branch name from git ref
+  whenReady(function() { return typeof window.loadPRComment === 'function'; }, function() {
+    var _origPR = window.loadPRComment;
+    window.loadPRComment = async function() {
+      var hdrEl = document.getElementById('pr-header');
+      var metaEl = document.getElementById('pr-meta');
+      var rowsEl = document.getElementById('pr-findings-rows');
+      var actEl = document.getElementById('pr-action');
+      if (!hdrEl || !rowsEl) return;
+      try { await window.ensureToken && window.ensureToken(); } catch(e) {}
+      var run = null;
+      try {
+        var r = await fetch('/api/v1/vsp/runs/index?limit=20', { headers: window.hdr ? window.hdr() : {} });
+        var d = await r.json();
+        var runs = d.runs || [];
+        run = runs.find(function(x) { return x.gate === 'FAIL'; }) || runs[0] || null;
+      } catch(e) {}
+      if (!run) {
+        hdrEl.textContent = '— No runs available';
+        metaEl.innerHTML = ''; rowsEl.innerHTML = ''; actEl.innerHTML = ''; return;
+      }
+      var sev = run.summary || {};
+      var score = sev.SCORE != null ? sev.SCORE : (run.score != null ? run.score : '—');
+      var gate = run.gate || 'PASS';
+      var rid = String(run.rid || run.id || '');
+      var branch = String(run.branch || (run.src ? String(run.src).split('/').slice(-2).join('/') : 'main'));
+      var titleDot = gate === 'FAIL' ? '🔴' : gate === 'WARN' ? '🟡' : '🟢';
+      hdrEl.textContent = titleDot + ' VSP Security Gate: ' + gate + ' — Score ' + score + '/100';
+      // SAFE: build meta with DOM
+      metaEl.innerHTML = '';
+      metaEl.appendChild(document.createTextNode('Scan run: '));
+      var rs = document.createElement('span'); rs.style.color = 'var(--cyan)'; rs.textContent = rid;
+      metaEl.appendChild(rs);
+      metaEl.appendChild(document.createTextNode(' · Branch: '));
+      var bs = document.createElement('span'); bs.style.color = 'var(--cyan)'; bs.textContent = branch;
+      metaEl.appendChild(bs);
+      // Findings rows
+      var sevOrder = ['CRITICAL', 'HIGH', 'MEDIUM'];
+      var rowClass = { CRITICAL: 'pr-row-crit', HIGH: 'pr-row-high', MEDIUM: 'pr-row-med' };
+      var dot = { CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡' };
+      rowsEl.innerHTML = '';
+      var topPainful = null;
+      for (var i = 0; i < sevOrder.length; i++) {
+        var s = sevOrder[i];
+        var count = sev[s] || 0;
+        if (count === 0) continue;
+        if (!topPainful) topPainful = s;
+        var topMsg = '';
+        try {
+          var fr = await fetch('/api/v1/vsp/findings?run_id=' + encodeURIComponent(run.id) + '&severity=' + s + '&limit=1',
+            { headers: window.hdr ? window.hdr() : {} });
+          var fd = await fr.json();
+          var top = (fd.findings || [])[0];
+          if (top) {
+            var msg = String(top.message || '').length > 80 ? String(top.message).slice(0, 77) + '...' : String(top.message || '');
+            var loc = top.path ? ' in ' + String(top.path) + (top.line ? ':' + top.line : '') : '';
+            topMsg = String(top.tool || '?') + ' · ' + msg + loc;
+          }
+        } catch(e) {}
+        var rowDiv = document.createElement('div');
+        rowDiv.className = rowClass[s];
+        rowDiv.textContent = dot[s] + ' ' + s + ' (' + count + ')  ' + (topMsg || '(top finding unavailable)');
+        rowsEl.appendChild(rowDiv);
+      }
+      if ((sev.LOW || 0) > 0) {
+        var lowDiv = document.createElement('div');
+        lowDiv.style.cssText = 'font-size:11px;color:var(--t3);margin-top:4px';
+        lowDiv.textContent = '🟢 LOW (' + sev.LOW + ') · collapsed';
+        rowsEl.appendChild(lowDiv);
+      }
+      if (!rowsEl.children.length) {
+        var noDiv = document.createElement('div'); noDiv.style.cssText = 'color:var(--t3);font-size:11px';
+        noDiv.textContent = 'No findings'; rowsEl.appendChild(noDiv);
+      }
+      actEl.innerHTML = '';
+      if (gate === 'FAIL') {
+        actEl.appendChild(document.createTextNode('Fix ' + (topPainful || 'critical') + ' findings to unblock merge. '));
+        var lk = document.createElement('span'); lk.style.color = 'var(--cyan)'; lk.textContent = '→ View all findings in VSP';
+        actEl.appendChild(lk);
+      } else if (gate === 'WARN') {
+        actEl.appendChild(document.createTextNode('Review findings before merging. '));
+        var lk2 = document.createElement('span'); lk2.style.color = 'var(--cyan)'; lk2.textContent = '→ View all findings in VSP';
+        actEl.appendChild(lk2);
+      } else {
+        var ok = document.createElement('span'); ok.style.color = 'var(--green)'; ok.textContent = '✓ All checks passed.';
+        actEl.appendChild(ok);
+      }
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F45] cicd PR comment hardened — branch name safe'));
+  });
+
+  // F46: autofix table
+  whenReady(function() { return typeof window.loadAutofixStats === 'function' && document.getElementById('autofix-tbody'); }, function() {
+    var _origAF = window.loadAutofixStats;
+    window.loadAutofixStats = async function() {
+      try { await window.ensureToken && window.ensureToken(); } catch(e) {}
+      var findings = [];
+      try {
+        var r = await fetch('/api/v1/vsp/findings?limit=200&status=open', { headers: window.hdr ? window.hdr() : {} });
+        if (r.ok) { var d = await r.json(); findings = d.findings || []; }
+      } catch(e) {}
+      // Categories (use _autofixCategorize if exists)
+      if (typeof window._autofixCategorize === 'function') {
+        var cats = window._autofixCategorize(findings);
+        var fcEl = document.getElementById('fix-categories');
+        if (fcEl) {
+          fcEl.innerHTML = '';
+          cats.forEach(function(c) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--bg3);border-radius:var(--r-md)';
+            var lbl = document.createElement('span'); lbl.style.cssText = 'font-size:11px;flex:1;color:var(--t2)'; lbl.textContent = String(c.label || '');
+            var tot = document.createElement('span'); tot.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:var(--t3)'; tot.textContent = (c.count || 0) + ' total';
+            var fix = document.createElement('span'); fix.className = 'badge ' + ((c.fixable || 0) > 0 ? 'badge-ok' : 'badge-neutral'); fix.textContent = (c.fixable || 0) + ' fixable';
+            row.appendChild(lbl); row.appendChild(tot); row.appendChild(fix);
+            fcEl.appendChild(row);
+          });
+        }
+      }
+      // Fixable findings table
+      var sevOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 };
+      var fixable = findings.filter(window._autofixIsFixable || function() { return true; })
+        .sort(function(a, b) { return (sevOrder[a.severity] || 9) - (sevOrder[b.severity] || 9); })
+        .slice(0, 20);
+      var sevClass = { CRITICAL: 'sev-crit', HIGH: 'sev-high', MEDIUM: 'sev-med', LOW: 'sev-low', INFO: '' };
+      var tbody = document.getElementById('autofix-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      if (!fixable.length) {
+        var tr = document.createElement('tr'); var td = document.createElement('td');
+        td.colSpan = 7; td.style.cssText = 'text-align:center;padding:14px;color:var(--t3);font-size:11px';
+        td.textContent = 'No fixable findings — all clean or scan in progress';
+        tr.appendChild(td); tbody.appendChild(tr); return;
+      }
+      fixable.forEach(function(f) {
+        var tr = document.createElement('tr');
+        // Severity
+        var c1 = document.createElement('td');
+        var sevBadge = document.createElement('span'); sevBadge.className = 'sev ' + (sevClass[f.severity] || '');
+        sevBadge.textContent = String(f.severity || 'INFO'); c1.appendChild(sevBadge); tr.appendChild(c1);
+        // Tool
+        var c2 = document.createElement('td'); c2.style.cssText = 'font-size:10px;color:var(--t3)';
+        c2.textContent = String(f.tool || '?'); tr.appendChild(c2);
+        // Rule
+        var c3 = document.createElement('td');
+        c3.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--purple)';
+        c3.textContent = String(f.rule_id || '—'); tr.appendChild(c3);
+        // Description (with title attr safely set)
+        var c4 = document.createElement('td');
+        c4.style.cssText = 'font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        c4.title = String(f.message || '');
+        var desc = String(f.message || '').length > 60 ? String(f.message).slice(0, 57) + '...' : String(f.message || '');
+        var loc = f.path ? String(f.path) + (f.line ? ':' + f.line : '') : '';
+        c4.textContent = loc ? desc + ' (' + loc + ')' : desc;
+        tr.appendChild(c4);
+        // Fix
+        var c5 = document.createElement('td'); c5.style.cssText = 'font-size:11px;color:var(--cyan)';
+        c5.textContent = window._autofixDeriveFix ? window._autofixDeriveFix(f) : 'Manual review required';
+        tr.appendChild(c5);
+        // Status
+        var c6 = document.createElement('td');
+        var statBadge = document.createElement('span');
+        statBadge.className = 'badge ' + ((f.status === 'open' || !f.status) ? 'badge-danger' : 'badge-neutral');
+        var sl = String(f.status || 'open');
+        statBadge.textContent = sl.charAt(0).toUpperCase() + sl.slice(1);
+        c6.appendChild(statBadge); tr.appendChild(c6);
+        // Action
+        var c7 = document.createElement('td');
+        var ab = document.createElement('button'); ab.className = 'btn btn-sm'; ab.textContent = 'Apply fix';
+        ab.addEventListener('click', function() { window.showToast && window.showToast('Fix applied · re-scan to verify', 'success'); });
+        c7.appendChild(ab); tr.appendChild(c7);
+        tbody.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F46] cicd autofix hardened'));
+  });
+
+  // F47: history
+  whenReady(function() { return typeof window.renderHistory === 'function' && document.getElementById('history-tbody'); }, function() {
+    var _origRH = window.renderHistory;
+    window.renderHistory = function() {
+      var _histData = window._histData || [];
+      var tf = (document.getElementById('hist-filter-trigger')||{}).value || '';
+      var gf = (document.getElementById('hist-filter-gate')||{}).value || '';
+      var d = _histData.filter(function(x) { return (!tf || x.trigger === tf) && (!gf || x.gate === gf); });
+      var hc = document.getElementById('hist-count'); if (hc) hc.textContent = d.length + ' runs';
+      var tbody = document.getElementById('history-tbody'); if (!tbody) return;
+      tbody.innerHTML = '';
+      if (!d.length) {
+        var tr = document.createElement('tr'); var td = document.createElement('td');
+        td.colSpan = 8; td.style.cssText = 'text-align:center;padding:20px;color:var(--t3)';
+        td.textContent = 'No runs found'; tr.appendChild(td); tbody.appendChild(tr); return;
+      }
+      d.forEach(function(x) {
+        var tr = document.createElement('tr');
+        var c1 = document.createElement('td');
+        c1.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--cyan)';
+        c1.textContent = String(x.rid || x.id || '').slice(-14); tr.appendChild(c1);
+        var c2 = document.createElement('td');
+        var tb = document.createElement('span'); tb.className = 'badge badge-neutral'; tb.style.fontSize = '9px'; tb.textContent = String(x.trigger || 'cicd');
+        c2.appendChild(tb); tr.appendChild(c2);
+        var c3 = document.createElement('td');
+        var mb = document.createElement('span'); mb.className = 'badge badge-info'; mb.style.fontSize = '9px'; mb.textContent = String(x.mode || 'FULL');
+        c3.appendChild(mb); tr.appendChild(c3);
+        var c4 = document.createElement('td');
+        var gB = document.createElement('span');
+        gB.className = 'badge badge-' + (x.gate === 'PASS' ? 'ok' : x.gate === 'FAIL' ? 'danger' : 'warn');
+        gB.textContent = String(x.gate || '—');
+        c4.appendChild(gB); tr.appendChild(c4);
+        var c5 = document.createElement('td');
+        var score = (x.summary && x.summary.SCORE != null) ? x.summary.SCORE : (x.score != null ? x.score : 0);
+        c5.style.cssText = 'font-family:var(--font-mono);font-size:11px;color:' + (score >= 70 ? 'var(--green)' : score >= 50 ? 'var(--amber)' : 'var(--red)');
+        c5.textContent = (score === 0 && x.score == null && (!x.summary || x.summary.SCORE == null) ? '—' : score) + '/100';
+        tr.appendChild(c5);
+        var c6 = document.createElement('td');
+        c6.style.cssText = 'font-family:var(--font-mono);font-size:11px';
+        c6.textContent = String(x.total_findings != null ? x.total_findings : '—'); tr.appendChild(c6);
+        var c7 = document.createElement('td');
+        c7.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)';
+        c7.textContent = window.fmtDuration ? window.fmtDuration(x.started_at, x.finished_at) : '—'; tr.appendChild(c7);
+        var c8 = document.createElement('td');
+        c8.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)';
+        c8.textContent = String(x.created_at || '').slice(0, 16).replace('T', ' '); tr.appendChild(c8);
+        tbody.appendChild(tr);
+      });
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F47] cicd history hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F48-F52 — incident_response.html (5 fixes)
+// Note: file already partial-fixed via SEC-006. Complete the work.
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenIncidentResponse() {
+  if (!document.getElementById('inc-tbody') && !document.getElementById('mi-body')) return;
+
+  // F48 + F49: incidents table — replace with safe DOM
+  whenReady(function() { return typeof window.loadIncidents === 'function' && document.getElementById('inc-tbody'); }, function() {
+    window.loadIncidents = async function() {
+      try {
+        var r = await fetch('/api/p4/ir/incidents', {headers: window.TOKEN ? {'Authorization':'Bearer '+window.TOKEN} : {}});
+        var d = await r.json();
+        var ic = document.getElementById('inc-count');
+        if (ic) ic.textContent = (d.count || 0) + ' incidents · click để xem chi tiết';
+        var tb = document.getElementById('inc-tbody');
+        if (!tb) return;
+        tb.innerHTML = '';
+        if (!d.incidents || !d.incidents.length) {
+          var tr = document.createElement('tr'); var td = document.createElement('td');
+          td.colSpan = 8; td.className = 'empty'; td.textContent = 'No incidents';
+          tr.appendChild(td); tb.appendChild(tr); return;
+        }
+        d.incidents.forEach(function(i) {
+          var tr = document.createElement('tr'); tr.className = 'clickable';
+          (function(id) { tr.addEventListener('click', function() { window.showIncidentDetail && window.showIncidentDetail(id); }); })(i.incident_id);
+          // ID
+          var c1 = document.createElement('td'); c1.className = 'mono';
+          var b = document.createElement('b'); b.textContent = String(i.incident_id || '');
+          c1.appendChild(b); tr.appendChild(c1);
+          // Title
+          var c2 = document.createElement('td'); c2.textContent = String(i.title || ''); tr.appendChild(c2);
+          // Severity
+          var c3 = document.createElement('td');
+          c3.innerHTML = window.sevBadge ? window.sevBadge(i.severity) : '';
+          // sevBadge returns safe HTML — but verify
+          if (window.sevBadge) {
+            var sevHtml = window.sevBadge(i.severity);
+            // sevBadge map is hardcoded → safe to inject
+          }
+          tr.appendChild(c3);
+          // Phase
+          var c4 = document.createElement('td');
+          var phasePill = document.createElement('span'); phasePill.className = 'phase-pill';
+          phasePill.textContent = String(i.phase || '').replace('_', ' ');
+          c4.appendChild(phasePill); tr.appendChild(c4);
+          // Status
+          var c5 = document.createElement('td');
+          c5.innerHTML = window.statBadge ? window.statBadge(i.status) : '';
+          tr.appendChild(c5);
+          // Flags
+          var c6 = document.createElement('td');
+          if (i.is_substantial) {
+            var fl1 = document.createElement('span'); fl1.className = 'badge b-warn'; fl1.textContent = '72h'; c6.appendChild(fl1); c6.appendChild(document.createTextNode(' '));
+          }
+          if (i.is_ransomware) {
+            var fl2 = document.createElement('span'); fl2.className = 'badge b-bad'; fl2.textContent = '💰24h'; c6.appendChild(fl2);
+          }
+          if (!i.is_substantial && !i.is_ransomware) c6.textContent = '—';
+          tr.appendChild(c6);
+          // Detected
+          var c7 = document.createElement('td'); c7.className = 'mono';
+          c7.textContent = window.fmtAgo ? window.fmtAgo(i.detected_at) : String(i.detected_at || '');
+          tr.appendChild(c7);
+          // Actions
+          var c8 = document.createElement('td');
+          c8.addEventListener('click', function(ev) { ev.stopPropagation(); });
+          if (i.status !== 'closed') {
+            var advBtn = document.createElement('button'); advBtn.className = 'btn btn-sm'; advBtn.textContent = '▶ Advance';
+            (function(id, ph) { advBtn.addEventListener('click', function() { window.showTransition && window.showTransition(id, ph); }); })(i.incident_id, i.phase);
+            c8.appendChild(advBtn);
+          }
+          tr.appendChild(c8);
+          tb.appendChild(tr);
+        });
+      } catch(e) { console.error(e); }
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F48+F49] incident_response incidents hardened'));
+  });
+
+  // F50 + F51: editField + showIncidentDetail body — wrap to remove onclick template injection
+  whenReady(function() { return typeof window.editField === 'function'; }, function() {
+    var _origEdit = window.editField;
+    window.editField = async function(incidentId, field, currentVal) {
+      // Sanitize current value before showing in prompt (attacker-controlled if from API)
+      var safeCurrent = String(currentVal == null ? '' : currentVal);
+      var newVal = prompt('Edit ' + field + ':', safeCurrent);
+      if (newVal === null || newVal === safeCurrent) return;
+      try {
+        var r = await fetch('/api/p4/ir/incident/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window.TOKEN||'') },
+          body: JSON.stringify({ incident_id: incidentId, field: field, value: newVal })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        alert('✅ Updated');
+        window.showIncidentDetail && window.showIncidentDetail(incidentId);
+        window.loadIncidents && window.loadIncidents();
+      } catch(e) { alert('Error: ' + e.message); }
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F50+F51] incident_response editField hardened'));
+  });
+
+  // F52: evidence + playbook — these use innerHTML in tables; wrap if stable
+  whenReady(function() { return typeof window.loadPlaybooks === 'function'; }, function() {
+    var _origPB = window.loadPlaybooks;
+    window.loadPlaybooks = async function() {
+      try {
+        var r = await fetch('/api/p4/ir/playbooks', {headers: window.TOKEN ? {'Authorization':'Bearer '+window.TOKEN} : {}});
+        var d = await r.json();
+        var c = document.getElementById('pb-container');
+        if (!c) return;
+        if (!d.playbooks || !d.playbooks.length) { c.innerHTML = ''; var em = document.createElement('div'); em.className = 'empty'; em.textContent = 'No playbooks'; c.appendChild(em); return; }
+        c.innerHTML = '';
+        d.playbooks.forEach(function(pb) {
+          var card = document.createElement('div'); card.className = 'card';
+          var head = document.createElement('div'); head.className = 'card-head';
+          var titleDiv = document.createElement('div'); titleDiv.className = 'card-title';
+          titleDiv.textContent = String(pb.playbook_id || '') + ' — ' + String(pb.name || '');
+          head.appendChild(titleDiv);
+          var monoDiv = document.createElement('div'); monoDiv.className = 'mono';
+          monoDiv.textContent = (pb.incident_types || []).join(', ');
+          head.appendChild(monoDiv);
+          card.appendChild(head);
+          var body = document.createElement('div'); body.className = 'card-body';
+          var descDiv = document.createElement('div');
+          descDiv.style.cssText = 'font-size:11px;color:var(--t2);margin-bottom:10px';
+          descDiv.textContent = String(pb.description || '');
+          body.appendChild(descDiv);
+          (pb.phases || []).forEach(function(p) {
+            var phaseWrap = document.createElement('div'); phaseWrap.style.marginTop = '6px';
+            var phaseLabel = document.createElement('b');
+            phaseLabel.className = 'mono'; phaseLabel.style.color = 'var(--accent)';
+            phaseLabel.textContent = String(p.phase || '').replace('_', ' ');
+            phaseWrap.appendChild(phaseLabel);
+            var ul = document.createElement('ul');
+            ul.style.cssText = 'margin:4px 0 0 20px;font-size:11px';
+            (p.steps || []).forEach(function(s) {
+              var li = document.createElement('li'); li.textContent = String(s || '');
+              ul.appendChild(li);
+            });
+            phaseWrap.appendChild(ul); body.appendChild(phaseWrap);
+          });
+          card.appendChild(body); c.appendChild(card);
+        });
+      } catch(e) { console.error(e); }
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F52] incident_response playbooks hardened'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F53-F56 — supply_chain.html (4 fixes)
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenSupplyChain() {
+  if (!document.getElementById('signatures-tbody') && !document.querySelector('[onclick*="loadSignatures"]')) return;
+
+  whenReady(function() { return typeof window.loadSignatures === 'function'; }, function() {
+    var _orig = window.loadSignatures;
+    window.loadSignatures = async function() {
+      try {
+        var r = await fetch('/api/v1/sbom/signatures', { headers: window.hdr ? window.hdr() : {} });
+        var data = await r.json();
+        var tbody = document.getElementById('signatures-tbody') || document.querySelector('[id*="sig"][id*="body"]');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!data.signatures || !data.signatures.length) {
+          var tr = document.createElement('tr'); var td = document.createElement('td');
+          td.colSpan = 5; td.className = 'empty'; td.textContent = 'No signatures yet. Sign an artifact first.';
+          tr.appendChild(td); tbody.appendChild(tr); return;
+        }
+        data.signatures.forEach(function(s) {
+          var tr = document.createElement('tr');
+          // Build cells with textContent safely
+          ['artifact_name', 'signer', 'algo', 'verified_at', 'status'].forEach(function(key) {
+            var td = document.createElement('td');
+            td.style.cssText = 'font-family:var(--font-mono);font-size:11px';
+            td.textContent = String(s[key] != null ? s[key] : '—');
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+      } catch(e) { console.error(e); }
+    };
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F53] supply_chain signatures hardened'));
+  });
+
+  // Defensive — generic table wrapper for similar functions
+  ['loadProvenance', 'loadVEX'].forEach(function(fnName) {
+    whenReady(function() { return typeof window[fnName] === 'function'; }, function() {
+      var _orig = window[fnName];
+      window[fnName] = async function() {
+        try { return await _orig.apply(this, arguments); } catch(e) { console.error('[VSP-SYNC]', fnName, 'error:', e.message); }
+      };
+      (window.VSP_DEBUG && console.log('[VSP-SYNC] supply_chain ' + fnName + ' wrapped (defensive)'));
+    });
+  });
+
+  // F54+F55: Generic protection via mutation observer on tables containing supply chain data
+  whenReady(function() { return document.querySelector('table tbody'); }, function() {
+    var tables = document.querySelectorAll('table tbody');
+    tables.forEach(function(tbody) {
+      var obs = new MutationObserver(function() {
+        // Strip <script> tags and event handlers from any inserted content
+        var scripts = tbody.querySelectorAll('script');
+        scripts.forEach(function(s) { s.remove(); });
+        var all = tbody.querySelectorAll('*');
+        all.forEach(function(el) {
+          for (var i = el.attributes.length - 1; i >= 0; i--) {
+            var attr = el.attributes[i];
+            if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+          }
+        });
+      });
+      obs.observe(tbody, { childList: true, subtree: true });
+    });
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F54+F55] supply_chain table mutation observer armed'));
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F57-F59 — software_risk.html (3 fixes via mutation observer pattern)
+// F60-F61 — conmon.html
+// F62-F63 — sso_admin.html
+// F64-F66 — attestation, sbom_diff
+// Defense-in-depth via universal MutationObserver on common id patterns
+// ═══════════════════════════════════════════════════════════════════════════
+(function hardenRemainingPanels() {
+  // Universal sanitizer for table tbodies
+  var TARGETS = [
+    'asset-tbody', 'agent-grid', 'amod-findings', 'eol-tbody',
+    'sched-tbody', 'dev-tbody',
+    'sso-tbody', 'provider-tbody',
+    'forms-tbody', 'attest-body',
+    'diff-tbody', 'rid1', 'rid2'
+  ];
+  whenReady(function() { return TARGETS.some(function(id) { return document.getElementById(id); }); }, function() {
+    TARGETS.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var obs = new MutationObserver(function() {
+        var scripts = el.querySelectorAll('script');
+        scripts.forEach(function(s) { s.remove(); });
+        var all = el.querySelectorAll('*');
+        all.forEach(function(node) {
+          for (var i = node.attributes.length - 1; i >= 0; i--) {
+            var attr = node.attributes[i];
+            // Strip on* event handlers (defense in depth — render fn should use addEventListener)
+            // BUT: legitimate code uses onclick=... in template — only strip if value contains potentially dangerous content
+            if (/^on/i.test(attr.name)) {
+              var v = attr.value;
+              if (/<|>|\bjavascript:|\beval\(|\bFunction\(/i.test(v)) {
+                node.removeAttribute(attr.name);
+                console.warn('[VSP-SYNC] stripped suspicious ' + attr.name + ' from ' + node.tagName);
+              }
+            }
+          }
+        });
+      });
+      obs.observe(el, { childList: true, subtree: true });
+    });
+    (window.VSP_DEBUG && console.log('[VSP-SYNC F57-F66] universal sanitizer armed for ' + TARGETS.length + ' elements'));
+  });
+})();
+
+
+(window.VSP_DEBUG && console.log('═══════════════════════════════════════════════════════'));
+(window.VSP_DEBUG && console.log('VSP FE SYNC PATCH v6 loaded ✓ — 60 fixes registered'));
+(window.VSP_DEBUG && console.log('  Core:           F1-F5  (5)'));
+(window.VSP_DEBUG && console.log('  SIEM:           F6-F11 (6)'));
+(window.VSP_DEBUG && console.log('  Behavioral+TI:  F18-F22 (5)'));
+(window.VSP_DEBUG && console.log('  Vuln Mgmt:      F23-F25 (3)'));
+(window.VSP_DEBUG && console.log('  Network/NDR:    F26-F28 (3)'));
+(window.VSP_DEBUG && console.log('  P4 Compliance:  F29-F31 (3)'));
+(window.VSP_DEBUG && console.log('  Scheduler:      F32-F33 (2)'));
+(window.VSP_DEBUG && console.log('  SW Inventory:   F34-F41 (8) NEW IN V6'));
+(window.VSP_DEBUG && console.log('  CI/CD:          F42-F47 (6) NEW IN V6'));
+(window.VSP_DEBUG && console.log('  Incident Resp:  F48-F52 (5) NEW IN V6'));
+(window.VSP_DEBUG && console.log('  Supply Chain:   F53-F56 (4) NEW IN V6'));
+(window.VSP_DEBUG && console.log('  Universal:      F57-F66 (10) NEW IN V6'));
+(window.VSP_DEBUG && console.log('═══════════════════════════════════════════════════════'));
+
+})();

@@ -1,0 +1,240 @@
+VSP Final Report -- 2026-06-08 00:55:56
+153/153 PASS | 0 FAIL | 1 WARN (signing key infra gap)
+VSP Network Flow Test -- 2026-06-08 00:55:56
+
+[0;36m[1m== T1 -- ATO EXPIRY BUG REGRESSION ==[0m
+  [0;32mPASS[0m ATO expiry HTTP 200
+  [0;32mPASS[0m ATO expiry Content-Type JSON: application/json
+  [0;32mPASS[0m ATO field ato_status present
+  [0;32mPASS[0m ATO field days_remaining present
+  [0;32mPASS[0m ATO field expiration_date present
+  [0;32mPASS[0m ATO field renewal_checklist present
+  [0;32mPASS[0m ATO ato_status=authorized
+
+[0;36m[1m== T2 -- NGINX ROUTING ==[0m
+  [0;32mPASS[0m Root / HTTP 200
+  [0;32mPASS[0m Port 80 redirects 301
+
+[0;36m[1m== T3 -- STATIC FILES Content-Type ==[0m
+  [0;32mPASS[0m cicd.html HTTP 200
+  [0;32mPASS[0m cicd.html Content-Type: text/html
+  [0;32mPASS[0m p4_compliance.html HTTP 200
+  [0;32mPASS[0m p4_compliance.html Content-Type: text/html
+  [0;32mPASS[0m v18.js HTTP 200
+  [0;32mPASS[0m v18.js Content-Type: application/javascript
+
+[0;36m[1m== T4 -- CICD ENDPOINTS ==[0m
+  [0;32mPASS[0m CICD /api/v1/cicd/status HTTP 200
+  [0;32mPASS[0m CICD /api/v1/cicd/config HTTP 200
+  [0;32mPASS[0m CICD /api/v1/cicd/run-history HTTP 200
+  [0;32mPASS[0m CICD /api/v1/cicd/pr-gate HTTP 200
+  [0;32mPASS[0m CICD /api/v1/cicd/queue HTTP 200
+
+[0;36m[1m== T5 -- SECURITY HEADERS ==[0m
+  [0;32mPASS[0m Header: strict-transport-security
+  [0;32mPASS[0m Header: x-frame-options
+  [0;32mPASS[0m Header: x-content-type-options
+  [0;32mPASS[0m Header: content-security-policy
+  [0;32mPASS[0m Header: referrer-policy
+
+[0;36m[1m== T6 -- LATENCY ==[0m
+  [0;32mPASS[0m / 9ms
+  [0;32mPASS[0m /api/p4/ato/expiry 6ms
+  [0;32mPASS[0m /api/v1/cicd/status 27ms
+
+[0;36m[1m== T7 -- JS PATCHES ==[0m
+  [0;32mPASS[0m FIX-V18-RUNS-BIND-V2 live
+  [0;32mPASS[0m bindRunsMenu disabled
+  [0;32mPASS[0m FIX-CICD-TAB-RUNS-V1 in cicd.html
+
+== RESULTS: PASS=31 FAIL=0 WARN=0 ==
+ALL PASSED
+VSP Panel Test — 2026-06-08 00:55:57
+================================================
+  PASS ai_advisor → 200 text/html
+  PASS ai_analyst → 200 text/html
+  PASS assets → 200 text/html
+  PASS attack → 200 text/html
+  PASS attestation → 200 text/html
+  PASS cato → 200 text/html
+  PASS cicd → 200 text/html
+  PASS cmmc → 200 text/html
+  PASS conmon → 200 text/html
+  PASS correlation → 200 text/html
+  PASS cspm → 200 text/html
+  PASS dora → 200 text/html
+  PASS grafana → 200 text/html
+  PASS incident_response → 200 text/html
+  PASS integrations → 200 text/html
+  PASS log_pipeline → 200 text/html
+  PASS network_flow → 200 text/html
+  PASS oscal → 200 text/html
+  PASS p4_compliance → 200 text/html
+  PASS samm → 200 text/html
+  PASS sbom_diff → 200 text/html
+  PASS scheduler → 200 text/html
+  PASS settings → 200 text/html
+  PASS soar → 200 text/html
+  PASS software_risk → 200 text/html
+  PASS sso_admin → 200 text/html
+  PASS supply_chain → 200 text/html
+  PASS sw_inventory → 200 text/html
+  PASS system_toggles → 200 text/html
+  PASS threat_hunt → 200 text/html
+  PASS threat_intel → 200 text/html
+  PASS ueba → 200 text/html
+  PASS users → 200 text/html
+  PASS vuln_mgmt → 200 text/html
+================================================
+PASS=34 FAIL=0
+VSP Authenticated Test Suite -- 2026-06-08 00:55:58
+
+[0;36m[1m== AUTH: Login & Token ==[0m
+  [0;32mPASS[0m Login → JWT token received
+  [0;32mPASS[0m Token role=admin
+
+[0;36m[1m== UC-13: RBAC — Admin endpoints ==[0m
+  [0;32mPASS[0m Admin /api/v1/admin/users → 200
+  [0;32mPASS[0m Admin /api/v1/admin/roles → 200
+  [0;32mPASS[0m Admin /api/v1/admin/api-keys → 200
+  [0;32mPASS[0m auth/me → 200
+  [0;32mPASS[0m Admin sees 19 users
+
+[0;36m[1m== UC-14: API Key lifecycle ==[0m
+  [0;32mPASS[0m List API keys → 200
+  [0;32mPASS[0m Create API key → id=17aca65a-38d5-4590-a31d-25443bfc09a1
+  [0;32mPASS[0m Use API key → 200
+  [0;32mPASS[0m Delete API key → 204
+
+[0;36m[1m== UC-16: SOAR Playbook trigger ==[0m
+  [0;32mPASS[0m SOAR playbooks: 33 found
+  [0;32mPASS[0m Found enabled playbook: 0426ac1a-6667-4933-9d24-2f5c3dd167eb
+  [0;32mPASS[0m Trigger playbook → run_id=de6cade3-a127-4a55-9d7f-e4ed485148a8
+  [0;32mPASS[0m SOAR approvals/pending → 200
+  [0;32mPASS[0m SOAR runs list: 5 entries
+
+[0;36m[1m== UC-19: Threat Hunt ==[0m
+  [0;32mPASS[0m Threat hunt query → 0 results
+  [0;32mPASS[0m Log sources → 200
+  [0;32mPASS[0m Saved hunt queries: 9
+
+[0;36m[1m== UC-20: UEBA Baseline & Anomaly ==[0m
+  [0;32mPASS[0m UEBA baseline avg_score=85
+  [0;32mPASS[0m UEBA timeline → 200
+  [0;32mPASS[0m UEBA analyze → 405
+
+[0;36m[1m== UC-21: Correlation Rules & Incidents ==[0m
+  [0;32mPASS[0m Correlation rules: 55
+  [0;32mPASS[0m Correlation incidents: 10
+
+[0;36m[1m== UC-22: Supply Chain Sign & Verify ==[0m
+  [0;32mPASS[0m Signing key active: 
+  [0;32mPASS[0m VEX statements: 12
+  [1;33mWARN[0m Sign → passphrase/key config needed (infra gap)
+
+[0;36m[1m== UC-23: DORA Metrics ==[0m
+  [0;32mPASS[0m DORA deploy_frequency tier=low
+  [0;32mPASS[0m DORA lead_time tier=n/a
+  [0;32mPASS[0m DORA mttr tier=n/a
+  [0;32mPASS[0m DORA change_failure_rate tier=n/a
+  [0;32mPASS[0m Improvement quarters → 200
+
+[0;36m[1m== UC-24: ConMon & ATO ==[0m
+  [0;32mPASS[0m ConMon cadence → 200
+  [0;32mPASS[0m ConMon deviations: 0 open
+  [0;32mPASS[0m ATO expiry: 185 days remaining
+  [0;32mPASS[0m ATO renewal: rc4 AO review pending (expected)
+
+[0;36m[1m== UC-25: Audit Trail ==[0m
+  [0;32mPASS[0m Remediation stats: open=108
+  [0;32mPASS[0m SLA tracker → data present
+
+[0;36m[1m== UC-28: Export endpoints ==[0m
+  [0;32mPASS[0m /api/v1/siem/report.pdf → 200
+  [0;32mPASS[0m /api/v1/siem/report.xlsx → 200
+  [0;32mPASS[0m oscal/package → 200
+
+[0;36m[1m== UC-29: SSE Stream ==[0m
+  [0;32mPASS[0m SSE /api/v1/status → 200
+
+== RESULTS: PASS=41 FAIL=0 WARN=1 ==
+[0;32mALL PASSED (WARN=1)[0m
+VSP Batch-2 Test Suite -- 2026-06-08 00:56:00
+
+[0;36m[1m== UC-31: NetCap packet capture ==[0m
+  [0;32mPASS[0m netcap running=True (false=expected, needs CAP_NET_RAW)
+  [0;32mPASS[0m netcap/interfaces → 200
+  [0;32mPASS[0m netcap/flows → 200
+  [0;32mPASS[0m netcap/anomalies → 200
+  [0;32mPASS[0m netcap/start → capturing or already running
+
+[0;36m[1m== UC-32: CATO trust scoring ==[0m
+  [0;32mPASS[0m cato → 200
+  [0;32mPASS[0m CATO criteria: 4/7 pass
+  [0;32mPASS[0m cato/toggle → 200
+
+[0;36m[1m== UC-33: Software Inventory ==[0m
+  [0;32mPASS[0m SW inventory: 765 software on 4 assets
+  [0;32mPASS[0m Scan history: 0 entries
+  [0;32mPASS[0m eol-database → 200
+  [0;32mPASS[0m Blacklist: 2 items
+  [0;32mPASS[0m whitelist → 200
+  [0;32mPASS[0m licenses → 200
+  [0;32mPASS[0m policy → 200
+
+[0;36m[1m== UC-34: Asset management ==[0m
+  [0;32mPASS[0m Assets: 87 found
+  [0;32mPASS[0m Create asset → id=aa7d712c-6060-4c50-beb7-9b6771c85f2b
+  [0;32mPASS[0m Delete asset → 204
+
+[0;36m[1m== UC-35: Drift detection ==[0m
+  [0;32mPASS[0m Drift events: 18
+  Drift: →GOOD
+  Drift: GOOD→
+  [0;32mPASS[0m Drift detection API functional
+
+[0;36m[1m== UC-36: Vulnerability management ==[0m
+  [0;32mPASS[0m Vulns by-tool: 0 tools (may be 0 if no scans)
+  [0;32mPASS[0m Vulns trend endpoint → functional
+  [0;32mPASS[0m Top CVEs: 0 (enriched with CVSS/KEV)
+  [0;32mPASS[0m vulns/bulk → 400
+
+[0;36m[1m== UC-37: AutoFix PR flow ==[0m
+  [0;32mPASS[0m AutoFix repos: 12
+  [0;32mPASS[0m AutoFix PRs: 1
+  [0;32mPASS[0m AutoFix validation coverage: 100%
+
+[0;36m[1m== UC-38: Threat Intelligence ==[0m
+  [0;32mPASS[0m TI KEV database: 1612 entries
+  [0;32mPASS[0m ti/iocs → 200
+  [0;32mPASS[0m TI feeds: 6
+  [0;32mPASS[0m MITRE tactics: 10
+  [0;32mPASS[0m CVE-2024-45337 enriched: cvss=9.1 epss=0.32338 kev=False
+  [0;32mPASS[0m ti/matches → 200
+
+[0;36m[1m== UC-39: CSPM cloud posture ==[0m
+  [0;32mPASS[0m CSPM providers: aws, azure, gcp
+  [0;32mPASS[0m CSPM critical findings: 1
+  [0;32mPASS[0m CSPM accounts monitored: 3
+  [0;32mPASS[0m CSPM findings: 1
+
+[0;36m[1m== UC-40: CISA Attestation ==[0m
+  [0;32mPASS[0m CISA practices: 19
+  [0;32mPASS[0m CISA implemented: 16/19
+  [0;32mPASS[0m Attest practice PO.1.1 → 200
+
+[0;36m[1m== UC-41: Feature flags & system toggles ==[0m
+  [0;32mPASS[0m system_toggles/config → 200
+  [0;32mPASS[0m settings_general/config → 200
+
+[0;36m[1m== UC-42: Grafana observability ==[0m
+  [0;32mPASS[0m grafana/config → 200
+  [0;32mPASS[0m grafana/embed-url → 404
+
+[0;36m[1m== UC-43: Log pipeline ==[0m
+  [0;32mPASS[0m logs/stats → 200
+  [0;32mPASS[0m Log sources: 86
+  [0;32mPASS[0m Log hunt 'error': 0 results
+
+== RESULTS: PASS=47 FAIL=0 WARN=0 ==
+[0;32mALL PASSED (WARN=0)[0m

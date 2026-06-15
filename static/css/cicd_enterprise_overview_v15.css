@@ -1,0 +1,228 @@
+/* CICD_ENTERPRISE_OVERVIEW_V15
+   Make Overview look like a production control center:
+   - replace cramped overview tables with card/list rows
+   - keep detail tabs as tables
+   - no page overflow
+*/
+
+html,
+body,
+.v13 {
+  overflow-x: hidden !important;
+}
+
+#tab-overview .overview-table {
+  display: none !important;
+}
+
+.cicd-v15-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, .86fr);
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.cicd-v15-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cicd-v15-panel {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #0b1427, #070d1a);
+  border-radius: 16px;
+  padding: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cicd-v15-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.cicd-v15-title {
+  font-weight: 950;
+  color: #e8f0fb;
+}
+
+.cicd-v15-sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.cicd-v15-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cicd-v15-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(37,49,79,.78);
+  background: #08101f;
+  border-radius: 13px;
+  padding: 10px;
+  min-width: 0;
+}
+
+.cicd-v15-row:hover {
+  background: rgba(96,165,250,.055);
+  border-color: rgba(96,165,250,.32);
+}
+
+.cicd-v15-main {
+  min-width: 0;
+}
+
+.cicd-v15-id {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 900;
+  color: #dbeafe;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cicd-v15-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cicd-v15-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 56px;
+}
+
+.cicd-v15-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cicd-v15-mini {
+  border: 1px solid rgba(37,49,79,.78);
+  background: #08101f;
+  border-radius: 13px;
+  padding: 11px;
+  min-width: 0;
+}
+
+.cicd-v15-mini-label {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 950;
+}
+
+.cicd-v15-mini-value {
+  margin-top: 7px;
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -.04em;
+}
+
+.cicd-v15-mini-sub {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cicd-v15-bar {
+  height: 8px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #0b1324;
+  border: 1px solid rgba(37,49,79,.78);
+}
+
+.cicd-v15-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(34,197,94,.85), rgba(96,165,250,.85));
+}
+
+.cicd-v15-risk {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cicd-v15-risk-card {
+  border: 1px solid rgba(37,49,79,.78);
+  background: #08101f;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.cicd-v15-risk-label {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 950;
+}
+
+.cicd-v15-risk-value {
+  margin-top: 6px;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.cicd-v15-empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed rgba(96,165,250,.25);
+  border-radius: 12px;
+}
+
+#tab-overview .grid2:first-of-type {
+  display: none !important;
+}
+
+#tab-overview .grid3:first-of-type {
+  display: none !important;
+}
+
+/* Keep pipeline card but make it compact inside new section if original still exists */
+#tab-overview > .grid2,
+#tab-overview .grid2 {
+  min-width: 0 !important;
+}
+
+@media (max-width: 1500px) {
+  .cicd-v15-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cicd-v15-risk {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px) {
+  .cicd-v15-two,
+  .cicd-v15-risk {
+    grid-template-columns: 1fr;
+  }
+}

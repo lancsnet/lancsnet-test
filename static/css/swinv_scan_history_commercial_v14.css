@@ -1,0 +1,224 @@
+/* SWINV_SCAN_HISTORY_COMMERCIAL_V15_POLISH */
+#swinv-v14-summary,
+.swinv-v14-summary {
+  margin: 10px 0 12px !important;
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(128px, 1fr)) !important;
+  gap: 10px !important;
+  width: 100% !important;
+  align-items: stretch !important;
+}
+
+.swinv-v14-card {
+  display: block !important;
+  background: linear-gradient(180deg, rgba(22, 31, 49, .96), rgba(13, 20, 33, .96)) !important;
+  border: 1px solid rgba(94, 234, 212, .13) !important;
+  border-radius: 12px !important;
+  padding: 11px 13px !important;
+  min-height: 68px !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.24) !important;
+}
+
+.swinv-v14-label {
+  display: block !important;
+  color: #7dd3fc !important;
+  font-size: 9px !important;
+  line-height: 1.2 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .09em !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  opacity: .9 !important;
+}
+
+.swinv-v14-value {
+  display: block !important;
+  margin-top: 7px !important;
+  color: #e5f3ff !important;
+  font-size: 20px !important;
+  line-height: 1.1 !important;
+  font-weight: 900 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
+
+.swinv-v14-sub {
+  display: block !important;
+  margin-top: 4px !important;
+  color: #93a4bd !important;
+  font-size: 10px !important;
+  line-height: 1.25 !important;
+}
+
+.swinv-v14-gate-pass { color: #22c55e !important; }
+.swinv-v14-gate-warn { color: #f59e0b !important; }
+.swinv-v14-gate-block { color: #ef4444 !important; }
+
+#swinv-v14-toolbar,
+.swinv-v14-toolbar {
+  margin: 8px 0 8px !important;
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  padding: 7px 9px !important;
+  background: rgba(15, 23, 42, .55) !important;
+  border: 1px solid rgba(148, 163, 184, .11) !important;
+  border-radius: 10px !important;
+}
+
+.swinv-v14-note {
+  color: #9fb0c8 !important;
+  font-size: 10px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
+
+.swinv-v14-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+}
+
+.swinv-v14-btn {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  border: 1px solid rgba(103, 232, 249, .25) !important;
+  background: rgba(15, 23, 42, .95) !important;
+  color: #67e8f9 !important;
+  border-radius: 7px !important;
+  padding: 4px 8px !important;
+  font-size: 9px !important;
+  line-height: 1.1 !important;
+  cursor: pointer !important;
+  font-weight: 700 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04) !important;
+}
+
+.swinv-v14-btn:hover {
+  background: rgba(30, 41, 59, 1) !important;
+  border-color: rgba(103, 232, 249, .55) !important;
+}
+
+.swinv-v14-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 999px !important;
+  padding: 3px 8px !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
+
+.swinv-v14-pill.pass {
+  color: #22c55e !important;
+  background: rgba(34,197,94,.13) !important;
+  border: 1px solid rgba(34,197,94,.28) !important;
+}
+
+.swinv-v14-pill.warn {
+  color: #f59e0b !important;
+  background: rgba(245,158,11,.13) !important;
+  border: 1px solid rgba(245,158,11,.3) !important;
+}
+
+.swinv-v14-pill.block {
+  color: #ef4444 !important;
+  background: rgba(239,68,68,.13) !important;
+  border: 1px solid rgba(239,68,68,.32) !important;
+}
+
+th[data-v14-actions-head],
+td[data-v14-actions-cell] {
+  min-width: 215px !important;
+  width: 215px !important;
+}
+
+td[data-v14-actions-cell] {
+  vertical-align: middle !important;
+}
+
+.swinv-v14-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+  background: rgba(2,6,23,.68) !important;
+  backdrop-filter: blur(8px) !important;
+  display: none !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+}
+
+.swinv-v14-modal-backdrop.open {
+  display: flex !important;
+}
+
+.swinv-v14-modal {
+  width: min(760px, 96vw) !important;
+  background: #111827 !important;
+  border: 1px solid rgba(148,163,184,.22) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 30px 80px rgba(0,0,0,.5) !important;
+  overflow: hidden !important;
+}
+
+.swinv-v14-modal-head {
+  padding: 14px 16px !important;
+  border-bottom: 1px solid rgba(148,163,184,.12) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.swinv-v14-modal-title {
+  color: #e5e7eb !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+
+.swinv-v14-modal-body {
+  padding: 16px !important;
+  color: #cbd5e1 !important;
+  font-size: 12px !important;
+}
+
+.swinv-v14-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.swinv-v14-kv {
+  background: rgba(15,23,42,.72) !important;
+  border: 1px solid rgba(148,163,184,.12) !important;
+  border-radius: 10px !important;
+  padding: 10px !important;
+}
+
+.swinv-v14-kv b {
+  display: block !important;
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  letter-spacing: .06em !important;
+  margin-bottom: 4px !important;
+}
+
+.swinv-v14-close {
+  background: transparent !important;
+  border: 0 !important;
+  color: #94a3b8 !important;
+  cursor: pointer !important;
+  font-size: 18px !important;
+}
+
+@media (max-width: 1180px) {
+  #swinv-v14-summary,
+  .swinv-v14-summary {
+    grid-template-columns: repeat(2, minmax(128px, 1fr)) !important;
+  }
+}

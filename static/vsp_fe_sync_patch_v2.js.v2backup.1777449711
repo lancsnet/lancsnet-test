@@ -1,0 +1,758 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// VSP FE SYNC PATCH v2 — 2026-04-29 (extended)
+// Sync FE với BE PR #92 + harden XSS surface across SIEM panels
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// CORE SYNC FIXES (apply trên trang chính index.html):
+//   F1 — Remediation save/bulk dùng POST → PATCH (sync BE d180ae1)
+//   F2 — Logout không call backend → call /api/v1/auth/logout (sync 4aef866)
+//   F3 — showToast XSS via innerHTML → escape message (textContent)
+//   F4 — Tool breakdown đọc nhầm _findingsCache → mirror từ _findingsData
+//   F5 — Policy evaluate innerHTML chứa r.reason → escape
+//
+// CROSS-PANEL XSS HARDENING (apply trên iframe panels):
+//   F6  — threat_hunt.html log events render → escape
+//   F7  — correlation.html incident/rules render → escape
+//   F8  — soar.html playbook run log render → escape
+//   F9  — log_pipeline.html live stream render → escape + fix onclick scope
+//   F10 — admin.html alerts render → escape
+//   F11 — users.html user list + audit render → escape
+//
+// LOAD ORDER trên index.html:
+//   <script src="vsp_upgrade_v100.js"></script>
+//   <script src="vsp_features_patch.js"></script>
+//   <script src="vsp_siem_patch.js"></script>
+//   <script src="vsp_fe_sync_patch.js"></script>   ← cuối cùng
+//
+// LOAD trên iframe panels (threat_hunt, correlation, soar, log_pipeline,
+// admin, users): include cùng file này — F1-F5 sẽ no-op nếu các function
+// chưa tồn tại. F6-F11 wrap renderers tương ứng nếu có.
+// ═══════════════════════════════════════════════════════════════════════════
+(function vspFESync() {
+'use strict';
+
+// ── HELPERS ──────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+window._vspEscapeHtml = escapeHtml;
+
+function escapeAttr(s) {
+  // For attribute contexts (href, onclick params, data-*, etc.)
+  return escapeHtml(s);
+}
+
+// Wait until DOM has the element/function we want to patch
+function whenReady(check, cb, maxMs) {
+  maxMs = maxMs || 10000;
+  var t0 = Date.now();
+  var iv = setInterval(function() {
+    if (check()) { clearInterval(iv); cb(); return; }
+    if (Date.now() - t0 > maxMs) { clearInterval(iv); }
+  }, 200);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F1 — REMEDIATION: POST → PATCH (5 callsites)
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixRemediationMethod() {
+  var _origFetch = window.fetch;
+  window.fetch = function(input, init) {
+    try {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      var method = (init && init.method) || (input && input.method) || 'GET';
+      if (
+        method.toUpperCase() === 'POST' &&
+        /\/remediation\/finding\/[^/?]+/.test(url) &&
+        !/\/auto/.test(url)
+      ) {
+        init = init || {};
+        init.method = 'PATCH';
+        if (window._vspDebug) console.log('[VSP-SYNC] rewrote POST→PATCH:', url);
+      }
+    } catch (e) { /* fall through */ }
+    return _origFetch.call(this, input, init);
+  };
+  console.log('[VSP-SYNC F1] Remediation POST→PATCH wrapper installed');
+})();
+
+(function fixApiHelper() {
+  var _origApi = window.api;
+  if (typeof _origApi !== 'function') return;
+  window.api = function(method, path, body, noAuth) {
+    if (
+      typeof method === 'string' &&
+      method.toUpperCase() === 'POST' &&
+      typeof path === 'string' &&
+      /\/remediation\/finding\/[^/?]+/.test(path) &&
+      !/\/auto/.test(path)
+    ) {
+      method = 'PATCH';
+      if (window._vspDebug) console.log('[VSP-SYNC] api() POST→PATCH:', path);
+    }
+    return _origApi.call(this, method, path, body, noAuth);
+  };
+  console.log('[VSP-SYNC F1b] api() helper PATCH-aware');
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F2 — LOGOUT: gọi backend blacklist
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixLogoutBlacklist() {
+  async function callBackendLogout(token) {
+    if (!token) return;
+    try {
+      await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: '{}',
+        keepalive: true
+      });
+    } catch (e) {
+      console.warn('[VSP-SYNC] backend logout failed:', e.message);
+    }
+  }
+  window._vspBackendLogout = callBackendLogout;
+
+  whenReady(function() { return typeof window.profileLogout === 'function'; }, function() {
+    var _orig = window.profileLogout;
+    window.profileLogout = function() {
+      var tk = window.TOKEN || '';
+      callBackendLogout(tk);
+      return _orig.apply(this, arguments);
+    };
+    console.log('[VSP-SYNC F2a] profileLogout calls backend blacklist');
+  });
+
+  // Watcher cho auto-logout / 401 / session expire
+  var _lastToken = window.TOKEN || (function() {
+    try { return localStorage.getItem('vsp_token') || ''; } catch(e) { return ''; }
+  })();
+  setInterval(function() {
+    var current = window.TOKEN || (function() {
+      try { return localStorage.getItem('vsp_token') || ''; } catch(e) { return ''; }
+    })();
+    if (_lastToken && !current) {
+      callBackendLogout(_lastToken);
+    }
+    _lastToken = current;
+  }, 1500);
+  console.log('[VSP-SYNC F2b] auto-logout watcher armed');
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F3 — showToast hardened
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixShowToastXSS() {
+  whenReady(function() { return typeof window.showToast === 'function'; }, function() {
+    window.showToast = function(msg, type) {
+      type = type || 'info';
+      var icons = {success:'✓', error:'✗', warn:'⚠', info:'◉'};
+      var colors = {success:'var(--green)',error:'var(--red)',warn:'var(--amber)',info:'var(--cyan)'};
+      var container = document.getElementById('toast-container');
+      if (!container) {
+        // Fallback: create inline notice
+        var fb = document.createElement('div');
+        fb.style.cssText = 'position:fixed;top:20px;right:20px;background:#222;color:#fff;padding:10px 16px;border-radius:6px;z-index:99999;font-family:system-ui';
+        fb.textContent = String(msg == null ? '' : msg);
+        document.body.appendChild(fb);
+        setTimeout(function() { fb.remove(); }, 3000);
+        return;
+      }
+      var t = document.createElement('div');
+      t.className = 'toast toast-' + escapeHtml(type);
+      var iconSpan = document.createElement('span');
+      iconSpan.className = 'toast-icon';
+      iconSpan.style.color = colors[type] || colors.info;
+      iconSpan.textContent = icons[type] || '◉';
+      var msgSpan = document.createElement('span');
+      msgSpan.textContent = String(msg == null ? '' : msg);
+      t.appendChild(iconSpan);
+      t.appendChild(msgSpan);
+      container.appendChild(t);
+      setTimeout(function() {
+        t.style.transition = 'opacity .3s';
+        t.style.opacity = '0';
+        setTimeout(function() { t.remove(); }, 300);
+      }, 3000);
+    };
+    console.log('[VSP-SYNC F3] showToast hardened (textContent)');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F4 — Findings cache mirror
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixFindingsCache() {
+  whenReady(function() { return typeof window.loadFindings === 'function'; }, function() {
+    var _orig = window.loadFindings;
+    window.loadFindings = async function() {
+      var ret = await _orig.apply(this, arguments);
+      if (Array.isArray(window._findingsData)) {
+        window._findingsCache = window._findingsData;
+      }
+      return ret;
+    };
+    console.log('[VSP-SYNC F4] _findingsData → _findingsCache mirror enabled');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F5 — Policy eval hardened
+// ═══════════════════════════════════════════════════════════════════════════
+(function fixPolicyEvalXSS() {
+  whenReady(function() { return typeof window.runEval === 'function' && document.getElementById('eval-result'); }, function() {
+    var _orig = window.runEval;
+    window.runEval = async function() {
+      var el = document.getElementById('eval-result');
+      if (!el) return _orig.apply(this, arguments);
+      el.textContent = '⏳ Evaluating…';
+      try {
+        if (window.TOKEN && typeof window.api === 'function') {
+          var r = await window.api('POST', '/policy/evaluate', {repo:'current'});
+          var color = r.decision === 'PASS' ? 'var(--green)'
+                    : r.decision === 'WARN' ? 'var(--amber)'
+                    : 'var(--red)';
+          el.innerHTML = '';
+          var sp = document.createElement('span');
+          sp.style.cssText = 'color:' + color + ';font-size:16px;font-weight:700';
+          sp.textContent = r.decision || '—';
+          el.appendChild(sp);
+          el.appendChild(document.createTextNode(' · score: '));
+          var sb = document.createElement('b');
+          sb.textContent = String(r.score == null ? '—' : r.score);
+          el.appendChild(sb);
+          el.appendChild(document.createTextNode(' · posture: '));
+          var pb = document.createElement('b');
+          pb.textContent = String(r.posture == null ? '—' : r.posture);
+          el.appendChild(pb);
+          if (r.reason) {
+            el.appendChild(document.createTextNode(' · '));
+            var rs = document.createElement('span');
+            rs.style.color = 'var(--t3)';
+            rs.textContent = String(r.reason);
+            el.appendChild(rs);
+          }
+        } else {
+          return _orig.apply(this, arguments);
+        }
+      } catch (e) {
+        el.innerHTML = '';
+        var fs = document.createElement('span');
+        fs.style.color = 'var(--red)';
+        fs.textContent = 'FAIL · ' + (e && e.message ? e.message : 'evaluation error');
+        el.appendChild(fs);
+      }
+    };
+    console.log('[VSP-SYNC F5] runEval hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F6-F11 — CROSS-PANEL XSS HARDENING
+// Generic approach: wrap renderers if they exist on the current panel.
+// Each panel has its own globals; we detect by checking for the function.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── F6 threat_hunt.html: renderResults & error handler ──────────────────
+(function hardenThreatHunt() {
+  // Detect by URL or by presence of #results-wrap
+  if (!document.getElementById('results-wrap')) return;
+  // Wrap renderResults if exists
+  whenReady(function() { return typeof window.renderResults === 'function' || window._results !== undefined; }, function() {
+    if (typeof window.renderResults !== 'function') return;
+    window.renderResults = function(q) {
+      var results = window._results || [];
+      var wrap = document.getElementById('results-wrap');
+      if (!wrap) return;
+      if (!results.length) {
+        wrap.textContent = '🔍 No events found matching your query';
+        var badge = document.getElementById('results-badge');
+        if (badge) badge.textContent = '';
+        return;
+      }
+      var badge = document.getElementById('results-badge');
+      if (badge) badge.textContent = '— ' + results.length + ' events';
+
+      // Build table via DOM API
+      var scrollWrap = document.createElement('div');
+      scrollWrap.style.overflowX = 'auto';
+      var table = document.createElement('table');
+      table.className = 'results-table';
+      var thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Time</th><th>Sev</th><th>Host</th><th>Process</th><th>Message</th><th>IP</th></tr>';
+      table.appendChild(thead);
+      var tbody = document.createElement('tbody');
+      results.forEach(function(e, i) {
+        var tr = document.createElement('tr');
+        tr.addEventListener('click', function() { window.openEvent && window.openEvent(i); });
+        function td(cls, text) {
+          var c = document.createElement('td');
+          if (cls) c.className = cls;
+          c.textContent = String(text == null ? '—' : text);
+          return c;
+        }
+        tr.appendChild(td('ts', e.ts));
+        var sevTd = document.createElement('td');
+        var sevSpan = document.createElement('span');
+        sevSpan.className = 'pill ' + (window.sevClass ? window.sevClass(e.severity) : 'pill-gray');
+        sevSpan.textContent = e.severity || 'INFO';
+        sevTd.appendChild(sevSpan);
+        tr.appendChild(sevTd);
+        tr.appendChild(td('host', e.host));
+        tr.appendChild(td('proc', e.process));
+        // Message: highlight is allowed but escaped first
+        var msgTd = document.createElement('td');
+        msgTd.className = 'msg';
+        msgTd.textContent = String(e.message || '—'); // safe: textContent
+        tr.appendChild(msgTd);
+        tr.appendChild(td('ts', e.source_ip));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      scrollWrap.appendChild(table);
+      wrap.innerHTML = '';
+      wrap.appendChild(scrollWrap);
+    };
+    console.log('[VSP-SYNC F6] threat_hunt renderResults hardened');
+  });
+})();
+
+// ─── F7 correlation.html: renderIncidents & renderRules ──────────────────
+(function hardenCorrelation() {
+  if (!document.getElementById('incidents-list') && !document.getElementById('rules-list')) return;
+
+  whenReady(function() { return typeof window.renderIncidents === 'function'; }, function() {
+    var _orig = window.renderIncidents;
+    window.renderIncidents = function() {
+      // Run original to get filter/state effects, then post-process
+      try { _orig.apply(this, arguments); } catch(e) {}
+      // Re-render safely
+      var sf = (document.getElementById('inc-filter')||{}).value || '';
+      var ssf = (document.getElementById('inc-status-filter')||{}).value || '';
+      var INCIDENTS = window.INCIDENTS || [];
+      var list = INCIDENTS.filter(function(i) {
+        if (sf && (i.severity||'').toUpperCase() !== sf) return false;
+        if (ssf && (i.status||'open') !== ssf) return false;
+        return true;
+      });
+      var listEl = document.getElementById('incidents-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      list.forEach(function(inc) {
+        var sc = window.sevClass ? window.sevClass((inc.severity||'').toUpperCase()) : '';
+        var row = document.createElement('div');
+        row.className = 'incident ' + sc;
+        row.dataset.incId = inc.id || '';
+        row.addEventListener('click', function() {
+          window.openIncidentDetail && window.openIncidentDetail(inc.id);
+        });
+        var hdr = document.createElement('div');
+        hdr.className = 'inc-hdr';
+        var idSpan = document.createElement('span');
+        idSpan.className = 'inc-id';
+        idSpan.textContent = inc.id || 'INC';
+        hdr.appendChild(idSpan);
+        // sevBadge / statusBadge return HTML — keep them but trust them since
+        // they're internal helpers (not user data).
+        if (window.sevBadge) {
+          var sbWrap = document.createElement('span');
+          sbWrap.innerHTML = window.sevBadge((inc.severity||'').toUpperCase(), true);
+          hdr.appendChild(sbWrap);
+        }
+        if (window.statusBadge) {
+          var stWrap = document.createElement('span');
+          stWrap.innerHTML = window.statusBadge(inc.status || 'open');
+          hdr.appendChild(stWrap);
+        }
+        var titleSpan = document.createElement('span');
+        titleSpan.className = 'inc-title';
+        titleSpan.textContent = inc.title || inc.Title || '—';
+        hdr.appendChild(titleSpan);
+        var timeSpan = document.createElement('span');
+        timeSpan.className = 'inc-time';
+        timeSpan.textContent = window.timeAgo ? window.timeAgo(inc.created_at || inc.CreatedAt) : '';
+        hdr.appendChild(timeSpan);
+        row.appendChild(hdr);
+        var desc = document.createElement('div');
+        desc.className = 'inc-desc';
+        desc.textContent = inc.description || inc.desc || inc.rule_name || '';
+        row.appendChild(desc);
+        var tags = document.createElement('div');
+        tags.className = 'inc-tags';
+        (inc.source_refs || []).forEach(function(s) {
+          if (typeof s !== 'string' && typeof s !== 'number') return; // skip objects
+          var pill = document.createElement('span');
+          pill.className = 'pill pill-cyan';
+          pill.textContent = String(s);
+          tags.appendChild(pill);
+        });
+        row.appendChild(tags);
+        listEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F7a] correlation renderIncidents hardened');
+  });
+
+  whenReady(function() { return typeof window.renderRules === 'function'; }, function() {
+    var _orig = window.renderRules;
+    window.renderRules = function() {
+      try { _orig.apply(this, arguments); } catch(e) {}
+      var listEl = document.getElementById('rules-list');
+      if (!listEl) return;
+      var RULES = window.RULES || [];
+      listEl.innerHTML = '';
+      RULES.forEach(function(r) {
+        var row = document.createElement('div');
+        row.className = 'rule-item';
+        row.addEventListener('click', function() { window.showRuleDetail && window.showRuleDetail(r.id); });
+        var hdr = document.createElement('div');
+        hdr.className = 'rule-hdr';
+        var btn = document.createElement('button');
+        btn.className = 'toggle ' + (r.enabled ? 'on' : 'off');
+        btn.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          window.toggleRule && window.toggleRule(r.id);
+        });
+        hdr.appendChild(btn);
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'rule-name';
+        nameSpan.textContent = r.name || '';
+        hdr.appendChild(nameSpan);
+        if (window.sevBadge) {
+          var sbWrap = document.createElement('span');
+          sbWrap.innerHTML = window.sevBadge(r.severity);
+          hdr.appendChild(sbWrap);
+        }
+        row.appendChild(hdr);
+        var desc = document.createElement('div');
+        desc.className = 'rule-desc';
+        desc.textContent = r.cond || '';
+        row.appendChild(desc);
+        var meta = document.createElement('div');
+        meta.className = 'rule-meta';
+        var win = document.createElement('span');
+        win.className = 'pill pill-purple';
+        win.textContent = (r.window_min || r.window || 5) + 'm';
+        meta.appendChild(win);
+        (r.sources || []).forEach(function(s) {
+          if (typeof s !== 'string' && typeof s !== 'number') return;
+          var p = document.createElement('span');
+          p.className = 'pill pill-cyan';
+          p.textContent = String(s);
+          meta.appendChild(p);
+        });
+        var hits = document.createElement('span');
+        hits.className = 'pill pill-gray';
+        hits.textContent = 'hits: ' + (r.hits || 0);
+        meta.appendChild(hits);
+        row.appendChild(meta);
+        listEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F7b] correlation renderRules hardened');
+  });
+})();
+
+// ─── F8 soar.html: openRunDetail log render ──────────────────────────────
+(function hardenSOAR() {
+  if (!document.getElementById('hmod-log')) return;
+  whenReady(function() { return typeof window.openRunDetail === 'function'; }, function() {
+    var _orig = window.openRunDetail;
+    window.openRunDetail = function(id) {
+      _orig.apply(this, arguments);
+      // Re-render log safely
+      var RUN_HISTORY = window.RUN_HISTORY || [];
+      var run = RUN_HISTORY.find(function(r) { return r.id === id; });
+      if (!run) return;
+      var logEl = document.getElementById('hmod-log');
+      if (!logEl) return;
+      logEl.innerHTML = '';
+      if (!run.log || !run.log.length) {
+        var empty = document.createElement('span');
+        empty.style.cssText = 'color:var(--t3);font-size:11px';
+        empty.textContent = 'No log available';
+        logEl.appendChild(empty);
+        return;
+      }
+      run.log.forEach(function(l) {
+        var row = document.createElement('div');
+        row.className = 'll';
+        var ts = document.createElement('span');
+        ts.className = 'll-ts';
+        ts.textContent = String(l.ts || '');
+        var lv = document.createElement('span');
+        lv.className = 'll-lv ll-' + escapeHtml(String(l.lv || 'INFO'));
+        lv.textContent = String(l.lv || 'INFO');
+        var msg = document.createElement('span');
+        msg.className = 'll-msg';
+        msg.textContent = String(l.msg || '');
+        row.appendChild(ts);
+        row.appendChild(lv);
+        row.appendChild(msg);
+        logEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F8] soar openRunDetail log hardened');
+  });
+})();
+
+// ─── F9 log_pipeline.html: renderStream + onclick scope fix ──────────────
+(function hardenLogPipeline() {
+  if (!document.getElementById('live-stream')) return;
+  whenReady(function() { return typeof window.renderStream === 'function'; }, function() {
+    var _orig = window.renderStream;
+    window.renderStream = function() {
+      var STREAM_ALL = window.STREAM_ALL || [];
+      var _filterActive = window._filterActive || {};
+      var list = STREAM_ALL.filter(function(e) {
+        if (_filterActive.sev && e.sev !== _filterActive.sev) return false;
+        if (_filterActive.src && e.src !== _filterActive.src) return false;
+        if (_filterActive.kw && !e.msg.toLowerCase().includes(_filterActive.kw.toLowerCase())) return false;
+        return true;
+      });
+      var el = document.getElementById('live-stream');
+      if (!el) return;
+      el.innerHTML = '';
+      list.slice(-200).forEach(function(e) {
+        var row = document.createElement('div');
+        row.className = 'll';
+        // Fix onclick scope bug — bind closure with actual entry
+        row.addEventListener('click', function() {
+          alert(String(e.raw || e.msg || ''));
+        });
+        var ts = document.createElement('span');
+        ts.className = 'll-ts';
+        ts.textContent = String(e.ts || '');
+        var src = document.createElement('span');
+        src.className = 'll-src';
+        src.textContent = String(e.src || '');
+        var sev = document.createElement('span');
+        sev.className = 'll-sev ll-' + escapeHtml(String(e.sev || 'INFO'));
+        sev.textContent = String(e.sev || 'INFO');
+        var msg = document.createElement('span');
+        msg.className = 'll-msg';
+        msg.textContent = String(e.msg || '');
+        row.appendChild(ts);
+        row.appendChild(src);
+        row.appendChild(sev);
+        row.appendChild(msg);
+        el.appendChild(row);
+      });
+      el.scrollTop = el.scrollHeight;
+      var totalEl = document.getElementById('stream-total');
+      var shownEl = document.getElementById('stream-shown');
+      var errEl   = document.getElementById('stream-errors');
+      if (totalEl) totalEl.textContent = window._streamTotal || 0;
+      if (shownEl) shownEl.textContent = list.length;
+      if (errEl)   errEl.textContent   = window._streamErrors || 0;
+    };
+    console.log('[VSP-SYNC F9] log_pipeline renderStream hardened + onclick fixed');
+  });
+})();
+
+// ─── F10 admin.html: renderAlert ────────────────────────────────────────
+(function hardenAdmin() {
+  if (!document.getElementById('overview-alerts') && !document.getElementById('alert-list')) return;
+  whenReady(function() { return typeof window.renderAlert === 'function'; }, function() {
+    window.renderAlert = function(a) {
+      var colors = {CRITICAL:'var(--red)',HIGH:'var(--amber)',MEDIUM:'var(--cyan)',LOW:'var(--t3)',INFO:'var(--green)',test:'var(--purple)'};
+      var col = colors[a.severity] || 'var(--t3)';
+      var wrap = document.createElement('div');
+      wrap.className = 'alert-item';
+      var bar = document.createElement('div');
+      bar.className = 'alert-sev';
+      bar.style.background = col;
+      wrap.appendChild(bar);
+      var body = document.createElement('div');
+      body.style.flex = '1';
+      var title = document.createElement('div');
+      title.className = 'alert-title';
+      title.textContent = String(a.title || '');
+      var msg = document.createElement('div');
+      msg.className = 'alert-msg';
+      msg.textContent = String(a.message || '');
+      var time = document.createElement('div');
+      time.className = 'alert-time';
+      var ts = a.sent_at ? new Date(a.sent_at).toLocaleString() : '';
+      time.textContent = ts + ' · ' + String(a.type || '') + ' · ' + String(a.channel || '');
+      body.appendChild(title);
+      body.appendChild(msg);
+      body.appendChild(time);
+      wrap.appendChild(body);
+      var sev = document.createElement('span');
+      sev.style.cssText = 'font-size:10px;font-weight:600;color:'+col+';padding:3px 8px;background:rgba(255,255,255,.05);border-radius:4px';
+      sev.textContent = String(a.severity || '');
+      wrap.appendChild(sev);
+      // Original returns string — we return a string for compat
+      return wrap.outerHTML;
+    };
+    console.log('[VSP-SYNC F10] admin renderAlert hardened');
+  });
+})();
+
+// ─── F11 users.html: renderUsers + renderAudit ──────────────────────────
+(function hardenUsers() {
+  if (!document.getElementById('user-tbody') && !document.getElementById('audit-list')) return;
+
+  whenReady(function() { return typeof window.renderUsers === 'function'; }, function() {
+    var _orig = window.renderUsers;
+    window.renderUsers = function() {
+      try { _orig.apply(this, arguments); } catch(e) {}
+      var USERS = window.USERS || [];
+      var sf = (document.getElementById('user-filter')||{}).value || '';
+      var rf = (document.getElementById('role-filter')||{}).value || '';
+      var list = USERS.filter(function(u) {
+        if (sf && u.status !== sf) return false;
+        if (rf && u.role !== rf) return false;
+        return true;
+      });
+      var sub = document.getElementById('users-sub');
+      if (sub) sub.textContent = list.length + ' users';
+      var tbody = document.getElementById('user-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      list.forEach(function(u, idx) {
+        var av = (u.name || '').split(' ').map(function(w) { return w[0] || ''; }).join('').slice(0,2).toUpperCase();
+        var avColor = window.avatarColor ? window.avatarColor(u.name) : 'var(--cyan)';
+        var tr = document.createElement('tr');
+
+        // Cell 1: avatar + name + email
+        var c1 = document.createElement('td');
+        var box = document.createElement('div');
+        box.style.cssText = 'display:flex;align-items:center;gap:10px';
+        var avDiv = document.createElement('div');
+        avDiv.className = 'avatar';
+        avDiv.style.cssText = 'background:' + avColor + '22;color:' + avColor;
+        avDiv.textContent = av;
+        var info = document.createElement('div');
+        var nameDiv = document.createElement('div');
+        nameDiv.style.fontWeight = '500';
+        nameDiv.textContent = String(u.name || '');
+        var emailDiv = document.createElement('div');
+        emailDiv.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)';
+        emailDiv.textContent = String(u.email || '');
+        info.appendChild(nameDiv);
+        info.appendChild(emailDiv);
+        box.appendChild(avDiv);
+        box.appendChild(info);
+        c1.appendChild(box);
+        tr.appendChild(c1);
+
+        // Cell 2: role badge (internal helper, trusted)
+        var c2 = document.createElement('td');
+        if (window.roleBadge) c2.innerHTML = window.roleBadge(u.role);
+        tr.appendChild(c2);
+
+        // Cell 3: last_login
+        var c3 = document.createElement('td');
+        c3.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono)';
+        c3.textContent = String(u.last_login || '');
+        tr.appendChild(c3);
+
+        // Cell 4: status badge
+        var c4 = document.createElement('td');
+        if (window.statusBadge) c4.innerHTML = window.statusBadge(u.status);
+        tr.appendChild(c4);
+
+        // Cell 5: MFA
+        var c5 = document.createElement('td');
+        var mfaPill = document.createElement('span');
+        mfaPill.className = u.mfa ? 'pill pill-green' : 'pill pill-amber';
+        mfaPill.textContent = u.mfa ? 'MFA on' : 'no MFA';
+        c5.appendChild(mfaPill);
+        tr.appendChild(c5);
+
+        // Cell 6: actions
+        var c6 = document.createElement('td');
+        var actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;gap:5px';
+        var editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-sm';
+        editBtn.innerHTML = '&#9998;';
+        editBtn.addEventListener('click', function() { window.editUser && window.editUser(idx); });
+        actions.appendChild(editBtn);
+        if (u.email !== 'admin@vsp.local') {
+          var delBtn = document.createElement('button');
+          delBtn.className = 'btn btn-danger btn-sm';
+          delBtn.innerHTML = '&#10005;';
+          delBtn.addEventListener('click', function() { window.deleteUser && window.deleteUser(idx); });
+          actions.appendChild(delBtn);
+        }
+        c6.appendChild(actions);
+        tr.appendChild(c6);
+
+        tbody.appendChild(tr);
+      });
+    };
+    console.log('[VSP-SYNC F11a] users renderUsers hardened');
+  });
+
+  whenReady(function() { return typeof window.renderAudit === 'function'; }, function() {
+    var _orig = window.renderAudit;
+    window.renderAudit = function() {
+      try { _orig.apply(this, arguments); } catch(e) {}
+      var AUDIT = window.AUDIT || [];
+      var af = (document.getElementById('audit-filter')||{}).value || '';
+      var list = AUDIT.filter(function(a) { return !af || a.action === af; });
+      var dotColor = {info:'var(--blue)',warn:'var(--amber)',error:'var(--red)'};
+      var listEl = document.getElementById('audit-list');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      list.forEach(function(a) {
+        var row = document.createElement('div');
+        row.className = 'audit-row';
+        var dot = document.createElement('div');
+        dot.className = 'audit-dot';
+        dot.style.background = dotColor[a.level] || 'var(--t3)';
+        var body = document.createElement('div');
+        body.style.flex = '1';
+        var detail = document.createElement('div');
+        detail.style.cssText = 'font-weight:500;margin-bottom:2px';
+        detail.textContent = String(a.detail || '');
+        var sub = document.createElement('div');
+        sub.style.cssText = 'color:var(--t3);font-size:10px;font-family:var(--font-mono)';
+        sub.textContent = String(a.user || '') + ' · ' + String(a.action || '');
+        body.appendChild(detail);
+        body.appendChild(sub);
+        var time = document.createElement('div');
+        time.style.cssText = 'font-size:10px;color:var(--t3);font-family:var(--font-mono);flex-shrink:0';
+        time.textContent = String(a.ts || '');
+        row.appendChild(dot);
+        row.appendChild(body);
+        row.appendChild(time);
+        listEl.appendChild(row);
+      });
+    };
+    console.log('[VSP-SYNC F11b] users renderAudit hardened');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log('═══════════════════════════════════════════════════════');
+console.log('VSP FE SYNC PATCH v2 loaded ✓ — 11 fixes registered');
+console.log('  Core (index.html):');
+console.log('    F1 Remediation POST→PATCH');
+console.log('    F2 Logout backend blacklist');
+console.log('    F3 showToast XSS hardened');
+console.log('    F4 Findings cache mirror');
+console.log('    F5 Policy eval XSS hardened');
+console.log('  Cross-panel (iframes):');
+console.log('    F6 threat_hunt log XSS hardened');
+console.log('    F7 correlation rules+incidents XSS hardened');
+console.log('    F8 soar playbook log XSS hardened');
+console.log('    F9 log_pipeline stream XSS + click fix');
+console.log('    F10 admin alerts XSS hardened');
+console.log('    F11 users list+audit XSS hardened');
+console.log('═══════════════════════════════════════════════════════');
+
+})();

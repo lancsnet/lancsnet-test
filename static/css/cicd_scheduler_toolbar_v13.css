@@ -1,0 +1,28 @@
+/* CICD_SCHEDULER_TOOLBAR_V13 */
+#cicd-v13-schedule-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  border: 1px solid rgba(126,234,134,.34) !important;
+  background: linear-gradient(180deg, rgba(32,88,54,.96), rgba(16,55,35,.96)) !important;
+  color: #dfffe2 !important;
+  border-radius: 10px !important;
+  padding: 7px 11px !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  cursor: pointer !important;
+  box-shadow: 0 10px 22px rgba(20,120,70,.20) !important;
+  white-space: nowrap !important;
+}
+
+#cicd-v13-schedule-btn:hover {
+  filter: brightness(1.08);
+}
+
+#cicd-v13-schedule-btn.v13-fixed {
+  position: fixed !important;
+  top: 112px !important;
+  right: 34px !important;
+  z-index: 2147483200 !important;
+}

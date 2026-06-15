@@ -1,0 +1,260 @@
+/* CICD_ADD_ACTION_MODALS_V1 */
+.vsp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99980;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 7, 14, .72);
+  backdrop-filter: blur(8px);
+}
+
+.vsp-modal-backdrop.open {
+  display: flex;
+}
+
+.vsp-modal {
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  background: linear-gradient(180deg, #121a28, #0a1019);
+  border: 1px solid rgba(130, 160, 210, .22);
+  border-radius: 18px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.55);
+  color: #dbe7f5;
+}
+
+.vsp-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(130,160,210,.14);
+}
+
+.vsp-modal-title {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.vsp-modal-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8390a5;
+}
+
+.vsp-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  color: #dbe7f5;
+  cursor: pointer;
+}
+
+.vsp-modal-body {
+  padding: 18px 20px;
+}
+
+.vsp-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.vsp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.vsp-field.full {
+  grid-column: 1 / -1;
+}
+
+.vsp-field label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #91a1ba;
+  font-weight: 800;
+}
+
+.vsp-field input,
+.vsp-field select,
+.vsp-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(6, 11, 18, .92);
+  color: #eef5ff;
+  border: 1px solid rgba(130,160,210,.20);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.vsp-field textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.vsp-field input:focus,
+.vsp-field select:focus,
+.vsp-field textarea:focus {
+  border-color: rgba(93, 139, 255, .68);
+  box-shadow: 0 0 0 3px rgba(93, 139, 255, .13);
+}
+
+.vsp-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px 20px;
+  border-top: 1px solid rgba(130,160,210,.12);
+}
+
+.vsp-btn-secondary,
+.vsp-btn-primary,
+.vsp-btn-danger {
+  border: 1px solid rgba(130,160,210,.18);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.vsp-btn-secondary {
+  background: rgba(255,255,255,.05);
+  color: #dbe7f5;
+}
+
+.vsp-btn-primary {
+  background: linear-gradient(180deg, #4d73ff, #2e55e8);
+  color: white;
+  box-shadow: 0 12px 28px rgba(70, 105, 255, .24);
+}
+
+.vsp-btn-danger {
+  background: linear-gradient(180deg, #ff6969, #cb3434);
+  color: white;
+}
+
+.vsp-drawer {
+  position: fixed;
+  top: 0;
+  right: -520px;
+  width: min(520px, 96vw);
+  height: 100vh;
+  z-index: 99970;
+  background: linear-gradient(180deg, #111827, #090e17);
+  border-left: 1px solid rgba(130,160,210,.22);
+  box-shadow: -24px 0 70px rgba(0,0,0,.48);
+  color: #dbe7f5;
+  transition: right .22s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.vsp-drawer.open {
+  right: 0;
+}
+
+.vsp-drawer-head {
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid rgba(130,160,210,.14);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.vsp-drawer-body {
+  padding: 16px 18px;
+  overflow: auto;
+}
+
+.vsp-step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.vsp-step-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(93, 139, 255, .18);
+  border: 1px solid rgba(93, 139, 255, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #bcd0ff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.vsp-step-title {
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.vsp-step-sub {
+  margin-top: 3px;
+  color: #8795ab;
+  font-size: 12px;
+}
+
+.vsp-toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 99999;
+  display: none;
+  min-width: 280px;
+  max-width: 420px;
+  background: linear-gradient(180deg, #142033, #0d1421);
+  border: 1px solid rgba(111, 231, 118, .28);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.42);
+  color: #dfffe2;
+  padding: 13px 14px;
+  font-weight: 800;
+}
+
+.vsp-toast.show {
+  display: block;
+}
+
+.vsp-mini-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.vsp-mini-kpi {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(130,160,210,.14);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.vsp-mini-kpi .num {
+  font-size: 22px;
+  font-weight: 900;
+  color: #7fea86;
+}
+
+.vsp-mini-kpi .txt {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #8997ac;
+}
+
+@media (max-width: 760px) {
+  .vsp-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
